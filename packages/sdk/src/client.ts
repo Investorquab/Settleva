@@ -1,6 +1,7 @@
 import type { PaymentCondition } from "@settleva/conditions";
 import { hashCondition } from "@settleva/conditions";
 import { derivePaymentId } from "./payment-id.js";
+import { keccak256, stringToHex } from "viem";
 
 export interface CreatePaymentInput {
   readonly payer: `0x${string}`;
@@ -14,6 +15,7 @@ export interface CreatePaymentInput {
 export interface PreparedCreatePayment {
   readonly paymentId: `0x${string}`;
   readonly conditionHash: `0x${string}`;
+  readonly providerHash: `0x${string}`;
   readonly proofContext: string;
   readonly request: CreatePaymentInput;
 }
@@ -27,7 +29,8 @@ export function prepareCreatePayment(input: CreatePaymentInput): PreparedCreateP
 
   const paymentId = derivePaymentId(input);
   const conditionHash = hashCondition(input.condition);
+  const providerHash = keccak256(stringToHex(input.condition.provider));
   const proofContext = JSON.stringify({paymentId, conditionHash});
 
-  return {paymentId, conditionHash, proofContext, request:input};
+  return {paymentId, conditionHash, providerHash, proofContext, request:input};
 }
