@@ -77,7 +77,7 @@ contract Settleva {
         address token,
         uint256 amount,
         uint64 expiry,
-        bytes32 conditionHash,
+        bytes32 conditionHash
     ) external {
         if (paymentId == bytes32(0)) revert InvalidPayment();
         if (payee == address(0) || token == address(0)) revert InvalidAddress();
@@ -122,7 +122,10 @@ contract Settleva {
 
         verifier.verifyProof(proof);
 
-        if (!_contains(bytes(proof.claimInfo.context), bytes(_toHex(payment.conditionHash)))) {
+        bytes memory expectedContextMessage = bytes(
+            string.concat('"contextMessage":"', _toHex(payment.conditionHash), '"')
+        );
+        if (!_contains(bytes(proof.claimInfo.context), expectedContextMessage)) {
             revert ConditionMismatch();
         }
 
