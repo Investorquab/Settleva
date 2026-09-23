@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { ReclaimProofRequest, verifyProof } from "@reclaimprotocol/js-sdk";
 import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/conditions";
+import { buildVerificationAttestationHash } from "@settleva/sdk";
+import { keccak256, stringToHex, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 export const runtime = "nodejs";
 
@@ -9,6 +12,7 @@ function isPaymentCondition(value: unknown): value is PaymentCondition {
   const condition = value as Record<string, unknown>;
   return condition.version === "1.0"
     && typeof condition.provider === "string"
+    && typeof condition.providerVersion === "string"
     && Array.isArray(condition.claims)
     && Number.isSafeInteger(condition.expiresAt)
     && condition.claims.every((claim) =>
@@ -19,19 +23,21 @@ function isPaymentCondition(value: unknown): value is PaymentCondition {
     );
 }
 
-function parseProofContext(value: string): {paymentId:string;conditionHash:`0x${string}`} | null {
+function parseProofContext(value: string): {paymentId:string;conditionHash:Hex} | null {
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (typeof parsed.paymentId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(parsed.paymentId)) return null;
     if (typeof parsed.conditionHash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(parsed.conditionHash)) return null;
-    return {paymentId:parsed.paymentId,conditionHash:parsed.conditionHash as `0x${string}`};
+    return {paymentId:parsed.paymentId,conditionHash:parsed.conditionHash as Hex};
   } catch { return null; }
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json() as {proofs?:unknown;expectedContext?:string;condition?:unknown};
-    if (!Array.isArray(body.proofs) || body.proofs.length === 0) return NextResponse.json({error:"No proof supplied."},{status:400});
+    if (!Array.isArray(body.proofs) || body.proofs.length !== 1) {
+      return NextResponse.json({error:"Exactly one Reclaim proof is required for this payment condition."},{status:400});
+    }
     if (typeof body.expectedContext !== "string") return NextResponse.json({error:"Expected proof context is required."},{status:400});
     if (!isPaymentCondition(body.condition)) return NextResponse.json({error:"The exact payment condition is required."},{status:400});
 
@@ -44,10 +50,12 @@ export async function POST(request: Request) {
     const appSecret = process.env.RECLAIM_APP_SECRET;
     const configuredProviderId = process.env.RECLAIM_PROVIDER_ID;
     const configuredProviderVersion = process.env.RECLAIM_PROVIDER_VERSION;
-    if (!appId || !appSecret || !configuredProviderId || !configuredProviderVersion) {
-      return NextResponse.json({error:"Reclaim server credentials and the pinned provider version are not configured."},{status:503});
+    const verifierPrivateKey = process.env.SETTLEVA_VERIFIER_PRIVATE_KEY as Hex | undefined;
+    if (!appId || !appSecret || !configuredProviderId || !configuredProviderVersion || !verifierPrivateKey) {
+      return NextResponse.json({error:"Reclaim credentials, pinned provider version, and Settleva verifier signing key are not configured."},{status:503});
     }
     if (condition.provider !== configuredProviderId) return NextResponse.json({verified:false,error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
+    if (condition.providerVersion !== configuredProviderVersion) return NextResponse.json({verified:false,error:"Payment condition provider version does not match the configured Reclaim provider version."},{status:400});
 
     const requestConfig = await ReclaimProofRequest.init(appId,appSecret,configuredProviderId,{log:false});
     const {providerId,providerVersion} = requestConfig.getProviderVersion();
@@ -57,6 +65,13 @@ export async function POST(request: Request) {
 
     const result = await verifyProof(body.proofs,{providerId,providerVersion});
     if (!result.isVerified) return NextResponse.json({verified:false,error:result.error?.message || "Reclaim rejected the proof."},{status:400});
+
+    const proof = body.proofs[0] as Record<string, unknown>;
+    const claimData = proof.claimData as Record<string, unknown> | undefined;
+    const proofIdentifier = claimData?.identifier;
+    if (typeof proofIdentifier !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(proofIdentifier)) {
+      return NextResponse.json({verified:false,error:"Verified Reclaim proof has no valid claim identifier."},{status:400});
+    }
 
     const data = Array.isArray(result.data) ? result.data : [];
     const matchingProof = data.find((entry) => {
@@ -79,7 +94,25 @@ export async function POST(request: Request) {
     });
     if (!contextMatches) return NextResponse.json({verified:false,error:"Proof context does not match this Settleva payment."},{status:400});
 
-    return NextResponse.json({verified:true,providerId,providerVersion,claims,data:result.data});
+    const account = privateKeyToAccount(verifierPrivateKey);
+    const attestationHash = buildVerificationAttestationHash({
+      paymentId: committed.paymentId as Hex,
+      conditionHash: committed.conditionHash,
+      providerHash: keccak256(stringToHex(providerId)),
+      proofIdentifier: proofIdentifier as Hex
+    });
+    const verificationSignature = await account.signMessage({message:{raw:attestationHash}});
+
+    return NextResponse.json({
+      verified:true,
+      providerId,
+      providerVersion,
+      claims,
+      data:result.data,
+      proofIdentifier,
+      verificationSigner:account.address,
+      verificationSignature
+    });
   } catch (error) {
     return NextResponse.json({verified:false,error:error instanceof Error ? error.message:"Proof verification failed."},{status:500});
   }
