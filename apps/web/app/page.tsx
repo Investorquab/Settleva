@@ -114,7 +114,7 @@ export default function Home() {
     setError(""); setVerifying(true);
     try {
       if(!result || !proof) throw new Error("Generate a proof first.");
-      const response=await fetch("/api/reclaim/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({proofs:proof,expectedContext:result.proofContext})});
+      const response=await fetch("/api/reclaim/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({proofs:proof,expectedContext:result.proofContext,condition:result.request.condition})});
       const body=await response.json() as {verified?:boolean;error?:string};
       if(!response.ok || !body.verified) throw new Error(body.error || "Proof verification failed.");
       setProofVerified(true);
