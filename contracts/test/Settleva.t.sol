@@ -24,6 +24,8 @@ contract SettlevaTest is Test {
     MockVerifier private verifier;
     address private payer = address(0x1);
     address private payee = address(0x2);
+    uint256 private verificationSignerPk = 0xA11CE;
+    address private verificationSigner;
     bytes32 private paymentId = keccak256("payment-1");
     bytes32 private conditionHash = keccak256(bytes("canonical-condition"));
     bytes32 private providerHash = keccak256(bytes("github"));
@@ -31,7 +33,8 @@ contract SettlevaTest is Test {
 
     function setUp() public {
         verifier = new MockVerifier();
-        settleva = new Settleva(address(verifier));
+        verificationSigner = vm.addr(verificationSignerPk);
+        settleva = new Settleva(address(verifier), verificationSigner);
         token = new MockToken();
         token.mint(payer, 1_000_000);
         vm.prank(payer);
@@ -53,6 +56,14 @@ contract SettlevaTest is Test {
         proof.signedClaim.claim.identifier = proofIdentifier;
     }
 
+    function _signature(IReclaimVerifier.Proof memory proof, uint256 privateKey) internal returns (bytes memory) {
+        bytes32 digest = keccak256(
+            abi.encode(paymentId, conditionHash, providerHash, proof.signedClaim.claim.identifier)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
     function testCreateLocksFunds() public {
         _create();
         assertEq(token.balanceOf(address(settleva)), 100_000);
@@ -62,17 +73,45 @@ contract SettlevaTest is Test {
     function testReleaseRequiresPayee() public {
         _create();
         vm.expectRevert(Settleva.NotPayee.selector);
-        settleva.release(paymentId, _proof());
+        settleva.release(paymentId, _proof(), _signature(_proof(), verificationSignerPk));
     }
 
-    function testReleaseAfterProofVerification() public {
+    function testReleaseRequiresVerificationAttestation() public {
         _create();
         vm.prank(payee);
-        settleva.release(paymentId, _proof());
+        vm.expectRevert(Settleva.InvalidVerificationSignature.selector);
+        settleva.release(paymentId, _proof(), hex"");
+    }
+
+    function testReleaseAfterProofVerificationAndAttestation() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        bytes memory signature = _signature(proof, verificationSignerPk);
+        vm.prank(payee);
+        settleva.release(paymentId, proof, signature);
         assertTrue(verifier.verified());
         assertTrue(settleva.usedProofIdentifiers(proofIdentifier));
         assertEq(token.balanceOf(payee), 100_000);
         assertEq(uint256(settleva.payments(paymentId).status), uint256(Settleva.Status.Released));
+    }
+
+    function testWrongVerificationSignerReverts() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        bytes memory signature = _signature(proof, 0xB0B);
+        vm.prank(payee);
+        vm.expectRevert(Settleva.InvalidVerificationSignature.selector);
+        settleva.release(paymentId, proof, signature);
+    }
+
+    function testAttestationBindsProofIdentifier() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        bytes memory signature = _signature(proof, verificationSignerPk);
+        proof.signedClaim.claim.identifier = keccak256("different-proof");
+        vm.prank(payee);
+        vm.expectRevert(Settleva.InvalidVerificationSignature.selector);
+        settleva.release(paymentId, proof, signature);
     }
 
     function testWrongProviderReverts() public {
@@ -81,7 +120,7 @@ contract SettlevaTest is Test {
         proof.claimInfo.provider = "http";
         vm.prank(payee);
         vm.expectRevert(Settleva.ProviderMismatch.selector);
-        settleva.release(paymentId, proof);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
     }
 
     function testWrongConditionReverts() public {
@@ -90,7 +129,7 @@ contract SettlevaTest is Test {
         proof.claimInfo.context = _context(paymentId, keccak256(bytes("wrong-condition")));
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
-        settleva.release(paymentId, proof);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
     }
 
     function testWrongPaymentReverts() public {
@@ -99,22 +138,26 @@ contract SettlevaTest is Test {
         proof.claimInfo.context = _context(keccak256("other-payment"), conditionHash);
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
-        settleva.release(paymentId, proof);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
     }
 
     function testCannotReleaseTwice() public {
         _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        bytes memory signature = _signature(proof, verificationSignerPk);
         vm.prank(payee);
-        settleva.release(paymentId, _proof());
+        settleva.release(paymentId, proof, signature);
         vm.prank(payee);
         vm.expectRevert(Settleva.InvalidStatus.selector);
-        settleva.release(paymentId, _proof());
+        settleva.release(paymentId, proof, signature);
     }
 
     function testProofIdentifierCannotBeReusedAcrossPayments() public {
         _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        bytes memory signature = _signature(proof, verificationSignerPk);
         vm.prank(payee);
-        settleva.release(paymentId, _proof());
+        settleva.release(paymentId, proof, signature);
 
         bytes32 secondPaymentId = keccak256("payment-2");
         vm.prank(payer);
@@ -122,10 +165,11 @@ contract SettlevaTest is Test {
 
         IReclaimVerifier.Proof memory replay = _proof();
         replay.claimInfo.context = _context(secondPaymentId, conditionHash);
+        bytes memory replaySignature = _signature(replay, verificationSignerPk);
 
         vm.prank(payee);
         vm.expectRevert(Settleva.ProofAlreadyUsed.selector);
-        settleva.release(secondPaymentId, replay);
+        settleva.release(secondPaymentId, replay, replaySignature);
     }
 
     function testRefundAfterExpiry() public {
