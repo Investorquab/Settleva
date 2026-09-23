@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { keccak256, stringToHex } from "viem";
 import type { PaymentCondition } from "@settleva/conditions";
 
 export interface PaymentIdInput {
@@ -20,5 +20,5 @@ export function derivePaymentId(input: PaymentIdInput): `0x${string}` {
     condition: input.condition
   });
 
-  return `0x${createHash("sha256").update(payload, "utf8").digest("hex")}`;
+  return keccak256(stringToHex(payload));
 }
