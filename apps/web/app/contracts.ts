@@ -30,7 +30,16 @@ export const settlevaAbi = [
             {name:"signatures",type:"bytes[]"}
           ]}
         ]
-      }
+      },
+      {name:"verificationSignature",type:"bytes"}
     ],outputs:[]
+  },
+  {
+    type:"function",name:"verificationAttestationHash",stateMutability:"pure",
+    inputs:[
+      {name:"paymentId",type:"bytes32"},{name:"conditionHash",type:"bytes32"},
+      {name:"providerHash",type:"bytes32"},{name:"proofIdentifier",type:"bytes32"}
+    ],
+    outputs:[{type:"bytes32"}]
   }
 ] as const;
