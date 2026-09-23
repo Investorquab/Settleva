@@ -44,6 +44,7 @@ export default function Home() {
   const [proof,setProof] = useState<unknown[]|null>(null);
   const [proofVerified,setProofVerified] = useState(false);
   const [verificationSignature,setVerificationSignature] = useState<Hex | "">("");
+  const [reclaimSessionId,setReclaimSessionId] = useState("");
   const [funding,setFunding] = useState(false);
   const [verifying,setVerifying] = useState(false);
   const [settling,setSettling] = useState(false);
@@ -64,7 +65,7 @@ export default function Home() {
   }),[provider,providerVersion,repository,ref,sha,environment,status,expiresAt]);
 
   function prepare() {
-    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setVerificationSignature(""); setSettlementTx("");
+    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setVerificationSignature(""); setReclaimSessionId(""); setSettlementTx("");
     try {
       if (!payer || !payee || !token) throw new Error("Enter payer, payee and token addresses.");
       setResult(prepareCreatePayment({payer:payer as Address,payee:payee as Address,token:token as Address,amount,expiry:Number(expiresAt),condition}));
@@ -113,8 +114,9 @@ export default function Home() {
     try {
       if (!result || !txHash) throw new Error("Fund the payment first.");
       const response=await fetch("/api/reclaim/request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context:result.proofContext,condition:result.request.condition})});
-      const body=await response.json() as {request?:string;error?:string};
-      if (!response.ok || !body.request) throw new Error(body.error || "Could not create Reclaim request.");
+      const body=await response.json() as {request?:string;sessionId?:string;error?:string};
+      if (!response.ok || !body.request || !body.sessionId) throw new Error(body.error || "Could not create Reclaim request.");
+      setReclaimSessionId(body.sessionId);
       const reclaim=await ReclaimProofRequest.fromJsonString(body.request);
       setProofStatus("Reclaim verification started. Complete the provider flow.");
       await reclaim.startSession({
@@ -132,7 +134,7 @@ export default function Home() {
     setError(""); setVerifying(true);
     try {
       if(!result || !proof) throw new Error("Generate a proof first.");
-      const response=await fetch("/api/reclaim/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({proofs:proof,expectedContext:result.proofContext,condition:result.request.condition})});
+      const response=await fetch("/api/reclaim/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({proofs:proof,sessionId:reclaimSessionId,expectedContext:result.proofContext,condition:result.request.condition})});
       const body=await response.json() as {verified?:boolean;error?:string;verificationSignature?:Hex};
       if(!response.ok || !body.verified || !body.verificationSignature) throw new Error(body.error || "Proof verification failed.");
       setVerificationSignature(body.verificationSignature);
