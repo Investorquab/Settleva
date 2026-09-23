@@ -72,8 +72,7 @@ contract SettlevaTest is Test {
             address(token),
             100_000,
             uint64(block.timestamp + 1 days),
-            conditionHash,
-            contextHash
+            conditionHash
         );
     }
 
