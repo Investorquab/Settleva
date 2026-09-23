@@ -17,4 +17,7 @@ const base = {
 const prepared = prepareCreatePayment(base);
 if (!prepared.paymentId.startsWith("0x") || prepared.paymentId.length !== 66) throw new Error("payment id failed");
 if (prepared.conditionHash.length !== 66) throw new Error("condition hash failed");
-if (prepared.proofContext !== prepared.conditionHash) throw new Error("proof context must equal condition hash");
+
+const proofContext = JSON.parse(prepared.proofContext) as Record<string, string>;
+if (proofContext.paymentId !== prepared.paymentId) throw new Error("proof context payment binding failed");
+if (proofContext.conditionHash !== prepared.conditionHash) throw new Error("proof context condition binding failed");
