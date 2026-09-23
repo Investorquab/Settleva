@@ -51,7 +51,8 @@ contract SettlevaTest is Test {
     address private payee = address(0x2);
 
     bytes32 private paymentId = keccak256("payment-1");
-    bytes32 private conditionHash = keccak256(bytes("github:merged:123"));
+    bytes32 private conditionHash = keccak256(bytes("canonical-condition"));
+    bytes32 private contextHash = keccak256(bytes("github:merged:123"));
 
     function setUp() public {
         verifier = new MockVerifier();
@@ -71,7 +72,8 @@ contract SettlevaTest is Test {
             address(token),
             100_000,
             uint64(block.timestamp + 1 days),
-            conditionHash
+            conditionHash,
+            contextHash
         );
     }
 
