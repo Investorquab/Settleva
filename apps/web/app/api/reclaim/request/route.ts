@@ -22,7 +22,8 @@ export async function POST(request: Request) {
     });
     requestConfig.setContext(context);
     requestConfig.setParams({
-      settlevaConditionHash: context
+      settlevaConditionHash: context,
+      settlevaClaims: JSON.stringify([])
     });
 
     return NextResponse.json({
