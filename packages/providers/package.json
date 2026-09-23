@@ -4,5 +4,5 @@
   "version":"0.1.0",
   "type":"module",
   "scripts":{"check":"tsc --noEmit","test":"tsc","build":"tsc"},
-  "dependencies":{"@settleva/verification":"workspace:*"}
+  "dependencies":{"@settleva/conditions":"workspace:*","@settleva/verification":"workspace:*"}
 }
