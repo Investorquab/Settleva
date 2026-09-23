@@ -13,6 +13,27 @@ export const settlevaAbi = [
     ],outputs:[]
   },
   {
+    type:"function",name:"release",stateMutability:"nonpayable",
+    inputs:[
+      {name:"paymentId",type:"bytes32"},
+      {
+        name:"proof",type:"tuple",
+        components:[
+          {name:"claimInfo",type:"tuple",components:[
+            {name:"provider",type:"string"},{name:"parameters",type:"string"},{name:"context",type:"string"}
+          ]},
+          {name:"signedClaim",type:"tuple",components:[
+            {name:"claim",type:"tuple",components:[
+              {name:"identifier",type:"bytes32"},{name:"owner",type:"address"},
+              {name:"timestampS",type:"uint32"},{name:"epoch",type:"uint32"}
+            ]},
+            {name:"signatures",type:"bytes[]"}
+          ]}
+        ]
+      }
+    ],outputs:[]
+  },
+  {
     type:"function",name:"payments",stateMutability:"view",
     inputs:[{name:"",type:"bytes32"}],
     outputs:[
