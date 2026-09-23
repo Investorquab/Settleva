@@ -59,9 +59,11 @@ export async function POST(request: Request) {
     }
 
     requestConfig.setContext(context.paymentId, context.conditionHash);
+    const sessionId = requestConfig.getSessionId();
 
     return NextResponse.json({
       request:requestConfig.toJsonString(),
+      sessionId,
       providerId:resolvedProviderId,
       providerVersion
     });
