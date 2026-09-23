@@ -66,9 +66,9 @@ export async function POST(request: Request) {
     const contextMatches = data.some((entry) => {
       const context = (entry as {context?:unknown}).context;
       if (!context || typeof context !== "object") return false;
-      const message = (context as {message?:unknown;contextMessage?:unknown}).message
-        ?? (context as {contextMessage?:unknown}).contextMessage;
-      return message === body.expectedContext;
+      const item = context as {contextAddress?:unknown;contextMessage?:unknown};
+      return item.contextAddress === committed.paymentId
+        && item.contextMessage === committed.conditionHash;
     });
     if (!contextMatches) return NextResponse.json({verified:false,error:"Proof context does not match this Settleva payment."},{status:400});
 
