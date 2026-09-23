@@ -7,6 +7,7 @@
     "@reclaimprotocol/js-sdk":"^5.8.2",
     "@settleva/conditions":"workspace:*",
     "@settleva/sdk":"workspace:*",
+    "@settleva/providers":"workspace:*",
     "viem":"^2.37.0",
     "next":"^15.5.4",
     "react":"^19.1.1",
