@@ -52,7 +52,6 @@ contract SettlevaTest is Test {
 
     bytes32 private paymentId = keccak256("payment-1");
     bytes32 private conditionHash = keccak256(bytes("canonical-condition"));
-    bytes32 private contextHash = keccak256(bytes("github:merged:123"));
 
     function setUp() public {
         verifier = new MockVerifier();
@@ -76,7 +75,7 @@ contract SettlevaTest is Test {
         );
     }
 
-    function _proof() internal pure returns (IReclaimVerifier.Proof memory proof) {
+    function _proof() internal view returns (IReclaimVerifier.Proof memory proof) {
         proof.claimInfo.provider = "github";
         proof.claimInfo.context = string.concat("github:merged:123:", vm.toString(conditionHash));
     }
