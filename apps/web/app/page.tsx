@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
+import { ReclaimProofRequest, transformForOnchain } from "@reclaimprotocol/js-sdk";
 import { createPublicClient, createWalletClient, custom, http, parseUnits, type Address, type Hex } from "viem";
 import { prepareCreatePayment } from "@settleva/sdk";
 import type { PaymentCondition } from "@settleva/conditions";
@@ -35,22 +35,21 @@ export default function Home() {
   const [txHash,setTxHash] = useState<Hex | "">("");
   const [proofStatus,setProofStatus] = useState("");
   const [proof,setProof] = useState<unknown[]|null>(null);
-  const [providerVersion,setProviderVersion] = useState<{providerId:string;providerVersion:string}|null>(null);
+  const [proofVerified,setProofVerified] = useState(false);
   const [funding,setFunding] = useState(false);
   const [verifying,setVerifying] = useState(false);
+  const [settling,setSettling] = useState(false);
+  const [settlementTx,setSettlementTx] = useState<Hex | "">("");
 
   const condition = useMemo<PaymentCondition>(() => ({
     version:"1.0",provider,claims:[{field,operator:"equals",value}],expiresAt:Number(expiresAt)
   }),[provider,field,value,expiresAt]);
 
   function prepare() {
-    setError(""); setResult(null); setTxHash(""); setProof(null); setProofStatus("");
+    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setSettlementTx("");
     try {
       if (!payer || !payee || !token) throw new Error("Enter payer, payee and token addresses.");
-      setResult(prepareCreatePayment({
-        payer:payer as Address,payee:payee as Address,token:token as Address,
-        amount,expiry:Number(expiresAt),condition
-      }));
+      setResult(prepareCreatePayment({payer:payer as Address,payee:payee as Address,token:token as Address,amount,expiry:Number(expiresAt),condition}));
     } catch (e) { setError(e instanceof Error ? e.message : "Could not prepare payment."); }
   }
 
@@ -62,27 +61,29 @@ export default function Home() {
     setPayer(accounts[0]);
   }
 
+  function arcClients() {
+    if (!configured()) throw new Error("Set Arc RPC and Settleva address first.");
+    if (!window.ethereum) throw new Error("No injected wallet found.");
+    const chain = {id:ARC_CHAIN_ID,name:"Arc",nativeCurrency:{name:"USDC",symbol:"USDC",decimals:6},rpcUrls:{default:{http:[ARC_RPC_URL]}}} as const;
+    return {
+      publicClient:createPublicClient({chain,transport:http(ARC_RPC_URL)}),
+      walletClient:createWalletClient({chain,transport:custom(window.ethereum)})
+    };
+  }
+
   async function fundPayment() {
     setError(""); setFunding(true);
     try {
       if (!result) throw new Error("Prepare the payment first.");
-      if (!configured()) throw new Error("Set Arc RPC and Settleva address first.");
-      if (!window.ethereum) throw new Error("No injected wallet found.");
-      const accounts = await window.ethereum.request({method:"eth_requestAccounts"}) as string[];
-      const account = accounts[0] as Address | undefined;
+      const accounts = await window.ethereum?.request({method:"eth_requestAccounts"}) as string[];
+      const account = accounts?.[0] as Address | undefined;
       if (!account || account.toLowerCase() !== result.request.payer.toLowerCase()) throw new Error("Connected wallet does not match the payer.");
-
-      const chain = {id:ARC_CHAIN_ID,name:"Arc",nativeCurrency:{name:"USDC",symbol:"USDC",decimals:6},rpcUrls:{default:{http:[ARC_RPC_URL]}}} as const;
-      const publicClient = createPublicClient({chain,transport:http(ARC_RPC_URL)});
-      const walletClient = createWalletClient({chain,transport:custom(window.ethereum)});
-      const decimals = await publicClient.readContract({address:result.request.token,abi:erc20Abi,functionName:"decimals"});
-      const units = parseUnits(result.request.amount, decimals);
-      const approveHash = await walletClient.writeContract({account,address:result.request.token,abi:erc20Abi,functionName:"approve",args:[SETTLEVA_ADDRESS,units]});
+      const {publicClient,walletClient}=arcClients();
+      const decimals=await publicClient.readContract({address:result.request.token,abi:erc20Abi,functionName:"decimals"});
+      const units=parseUnits(result.request.amount,decimals);
+      const approveHash=await walletClient.writeContract({account,address:result.request.token,abi:erc20Abi,functionName:"approve",args:[SETTLEVA_ADDRESS,units]});
       await publicClient.waitForTransactionReceipt({hash:approveHash});
-      const hash = await walletClient.writeContract({
-        account,address:SETTLEVA_ADDRESS,abi:settlevaAbi,functionName:"createPayment",
-        args:[result.paymentId,result.request.payee,result.request.token,units,BigInt(result.request.expiry),result.conditionHash,result.contextHash]
-      });
+      const hash=await walletClient.writeContract({account,address:SETTLEVA_ADDRESS,abi:settlevaAbi,functionName:"createPayment",args:[result.paymentId,result.request.payee,result.request.token,units,BigInt(result.request.expiry),result.conditionHash,result.contextHash]});
       setTxHash(hash);
       await publicClient.waitForTransactionReceipt({hash});
     } catch (e) { setError(e instanceof Error ? e.message : "Funding transaction failed."); }
@@ -90,49 +91,64 @@ export default function Home() {
   }
 
   async function requestProof() {
-    setError(""); setProofStatus("Creating Reclaim request…");
+    setError(""); setProofStatus("Creating Reclaim request…"); setProofVerified(false);
     try {
-      if (!result) throw new Error("Prepare and fund the payment first.");
-      const response = await fetch("/api/reclaim/request",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({context:result.proofContext})
-      });
-      const body = await response.json() as {request?:string;error?:string;providerId?:string;providerVersion?:string};
-      if (!response.ok || !body.request || !body.providerId || !body.providerVersion) throw new Error(body.error || "Could not create Reclaim request.");
-      const reclaim = await ReclaimProofRequest.fromJsonString(body.request);
-      setProviderVersion({providerId:body.providerId,providerVersion:body.providerVersion});
+      if (!result || !txHash) throw new Error("Fund the payment first.");
+      const response=await fetch("/api/reclaim/request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context:result.proofContext})});
+      const body=await response.json() as {request?:string;error?:string};
+      if (!response.ok || !body.request) throw new Error(body.error || "Could not create Reclaim request.");
+      const reclaim=await ReclaimProofRequest.fromJsonString(body.request);
       setProofStatus("Reclaim verification started. Complete the provider flow.");
       await reclaim.startSession({
-        onSuccess: (proofs) => {
-          const list = Array.isArray(proofs) ? proofs : [proofs];
+        onSuccess:(proofs)=>{
+          const list=Array.isArray(proofs)?proofs:[proofs];
           setProof(list as unknown[]);
           setProofStatus("Proof received. Verify it before settlement.");
         },
-        onError: (err) => setProofStatus(`Reclaim error: ${err.message}`)
+        onError:(err)=>setProofStatus(`Reclaim error: ${err.message}`)
       });
-    } catch (e) { setProofStatus(""); setError(e instanceof Error ? e.message : "Could not start Reclaim."); }
+    } catch(e){setProofStatus("");setError(e instanceof Error?e.message:"Could not start Reclaim.");}
   }
 
   async function verifyProofServerSide() {
     setError(""); setVerifying(true);
     try {
-      if (!result || !proof || !providerVersion) throw new Error("Generate a proof first.");
-      const response = await fetch("/api/reclaim/verify",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({proofs:proof,providerId:providerVersion.providerId,providerVersion:providerVersion.providerVersion,expectedContext:result.proofContext})
-      });
-      const body = await response.json() as {verified?:boolean;error?:string};
-      if (!response.ok || !body.verified) throw new Error(body.error || "Proof verification failed.");
+      if(!result || !proof) throw new Error("Generate a proof first.");
+      const response=await fetch("/api/reclaim/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({proofs:proof,expectedContext:result.proofContext})});
+      const body=await response.json() as {verified?:boolean;error?:string};
+      if(!response.ok || !body.verified) throw new Error(body.error || "Proof verification failed.");
+      setProofVerified(true);
       setProofStatus("Server-side Reclaim verification passed.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Proof verification failed."); }
-    finally { setVerifying(false); }
+    } catch(e){setError(e instanceof Error?e.message:"Proof verification failed.");}
+    finally{setVerifying(false);}
+  }
+
+  async function settlePayment() {
+    setError(""); setSettling(true);
+    try {
+      if(!result || !proof || !proofVerified) throw new Error("Verify the Reclaim proof first.");
+      const raw=proof[0] as Record<string,unknown>;
+      const transformed=transformForOnchain(raw);
+      const {walletClient,publicClient}=arcClients();
+      const accounts=await window.ethereum?.request({method:"eth_requestAccounts"}) as string[];
+      const account=accounts?.[0] as Address|undefined;
+      if(!account || account.toLowerCase()!==result.request.payee.toLowerCase()) throw new Error("Connect the payee wallet to settle this payment.");
+      const hash=await walletClient.writeContract({
+        account,address:SETTLEVA_ADDRESS,abi:settlevaAbi,functionName:"release",
+        args:[result.paymentId,transformed]
+      });
+      setSettlementTx(hash);
+      await publicClient.waitForTransactionReceipt({hash});
+      setProofStatus("Payment settled on Arc.");
+    } catch(e){setError(e instanceof Error?e.message:"Settlement transaction failed.");}
+    finally{setSettling(false);}
   }
 
   return <main>
     <div style={{marginBottom:28}}>
       <div className="muted">SETTLEVA / REFERENCE CONSOLE</div>
       <h1 style={{fontSize:48,margin:"8px 0"}}>Condition → proof → settlement.</h1>
-      <p className="muted" style={{maxWidth:700}}>Prepare an evidence-bound USDC payment without custody. Reclaim generates the proof; Settleva binds settlement to the exact proof context committed at funding.</p>
+      <p className="muted" style={{maxWidth:700}}>Prepare an evidence-bound USDC payment without custody. Reclaim generates and verifies the proof; Settleva binds release to the exact proof context committed at funding.</p>
     </div>
     <div className="grid">
       <section className="card">
@@ -156,12 +172,14 @@ export default function Home() {
           <button onClick={prepare}>Prepare commitment</button>
           <button onClick={()=>void connectWallet()}>Connect wallet</button>
         </div>
-        {result && <button disabled={funding} onClick={()=>void fundPayment()} style={{marginTop:10,width:"100%"}}>{funding ? "Funding…" : "Approve + fund on Arc"}</button>}
-        {result && txHash && <button disabled={proofStatus.includes("started") || !txHash} onClick={()=>void requestProof()} style={{marginTop:10,width:"100%"}}>Request Reclaim proof</button>}
-        {proof && <button disabled={verifying} onClick={()=>void verifyProofServerSide()} style={{marginTop:10,width:"100%"}}>{verifying ? "Verifying…" : "Verify proof server-side"}</button>}
+        {result && <button disabled={funding} onClick={()=>void fundPayment()} style={{marginTop:10,width:"100%"}}>{funding?"Funding…":"Approve + fund on Arc"}</button>}
+        {result && txHash && <button onClick={()=>void requestProof()} style={{marginTop:10,width:"100%"}}>Request Reclaim proof</button>}
+        {proof && <button disabled={verifying} onClick={()=>void verifyProofServerSide()} style={{marginTop:10,width:"100%"}}>{verifying?"Verifying…":"Verify proof server-side"}</button>}
+        {proofVerified && <button disabled={settling} onClick={()=>void settlePayment()} style={{marginTop:10,width:"100%"}}>{settling?"Settling…":"Release payment with proof"}</button>}
         {error && <p style={{color:"#b42318"}}>{error}</p>}
         {proofStatus && <p className="muted">{proofStatus}</p>}
         {txHash && <><p className="label">Funding transaction</p><pre>{txHash}</pre></>}
+        {settlementTx && <><p className="label">Settlement transaction</p><pre>{settlementTx}</pre></>}
       </section>
       <section className="card">
         <h2>Commitment</h2>
