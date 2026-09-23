@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "node:test";
 import {
   GITHUB_DEPLOYMENT_CLAIM_FIELDS,
   buildGitHubDeploymentCondition
