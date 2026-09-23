@@ -100,7 +100,24 @@ export async function POST(request: Request) {
       if (typeof parameters !== "string") return false;
       try {
         const parsed = JSON.parse(parameters) as Record<string, unknown>;
-        return parsed.settlevaConditionHash === body.expectedContext;
+        if (parsed.settlevaConditionHash !== body.expectedContext) return false;
+        if (typeof parsed.settlevaClaims !== "string") return false;
+        let requestedClaims: unknown;
+        try {
+          requestedClaims = JSON.parse(parsed.settlevaClaims);
+        } catch {
+          return false;
+        }
+        if (!Array.isArray(requestedClaims)) return false;
+        const normalize = (claims: unknown[]) => JSON.stringify(
+          claims
+            .map((claim) => {
+              const item = claim as Record<string, unknown>;
+              return { field:String(item.field), operator:String(item.operator), value:String(item.value) };
+            })
+            .sort((a,b) => a.field.localeCompare(b.field) || a.operator.localeCompare(b.operator) || a.value.localeCompare(b.value))
+        );
+        return normalize(requestedClaims) === normalize(condition.claims);
       } catch {
         return false;
       }
