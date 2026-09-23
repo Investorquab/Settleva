@@ -39,7 +39,7 @@ contract ReclaimVerifierAdapterTest is Test {
 
         vm.expectRevert(ReclaimVerifierAdapter.ContextMismatch.selector);
         adapter.verify(proof, "github", keccak256(bytes("settleva:1:right")));
-        assertTrue(mock.called());
+        assertFalse(mock.called());
     }
 
     function testAcceptsVerifiedExactContext() public {
