@@ -1,0 +1,1 @@
+{"name":"@settleva/web","private":true,"version":"0.1.0","scripts":{"check":"tsc --noEmit","test":"node --test","build":"next build"}}
