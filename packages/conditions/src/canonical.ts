@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { keccak256, stringToHex } from "viem";
 import type { ConditionClaim, PaymentCondition } from "./types.js";
 
 function compareClaims(a: ConditionClaim, b: ConditionClaim): number {
@@ -28,6 +28,17 @@ export function canonicalizeCondition(condition: PaymentCondition): string {
   });
 }
 
+/** EVM-native digest used as the stable condition commitment. */
 export function hashCondition(condition: PaymentCondition): `0x${string}` {
-  return `0x${createHash("sha256").update(canonicalizeCondition(condition),"utf8").digest("hex")}`;
+  return keccak256(stringToHex(canonicalizeCondition(condition)));
+}
+
+/** The exact Reclaim context committed by Settleva. */
+export function buildProofContext(condition: PaymentCondition): string {
+  return hashCondition(condition);
+}
+
+/** Hash of the exact proof context string expected by the settlement contract. */
+export function hashProofContext(condition: PaymentCondition): `0x${string}` {
+  return keccak256(stringToHex(buildProofContext(condition)));
 }
