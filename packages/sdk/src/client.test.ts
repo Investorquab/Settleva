@@ -8,7 +8,8 @@ const base = {
   expiry:1_800_000_000,
   condition:{
     version:"1.0" as const,
-    provider:"github",\n    providerVersion:"1.0.0",
+    provider:"github",
+    providerVersion:"1.0.0",
     claims:[{field:"repo.public",operator:"equals" as const,value:"true"}],
     expiresAt:1_800_000_000
   }
