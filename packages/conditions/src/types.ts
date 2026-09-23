@@ -9,6 +9,7 @@ export interface ConditionClaim {
 export interface PaymentCondition {
   readonly version: "1.0";
   readonly provider: string;
+  readonly providerVersion: string;
   readonly claims: readonly ConditionClaim[];
   readonly expiresAt: number;
 }
