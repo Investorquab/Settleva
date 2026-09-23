@@ -94,7 +94,7 @@ export default function Home() {
     setError(""); setProofStatus("Creating Reclaim request…"); setProofVerified(false);
     try {
       if (!result || !txHash) throw new Error("Fund the payment first.");
-      const response=await fetch("/api/reclaim/request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context:result.proofContext})});
+      const response=await fetch("/api/reclaim/request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context:result.proofContext,condition:result.request.condition})});
       const body=await response.json() as {request?:string;error?:string};
       if (!response.ok || !body.request) throw new Error(body.error || "Could not create Reclaim request.");
       const reclaim=await ReclaimProofRequest.fromJsonString(body.request);
