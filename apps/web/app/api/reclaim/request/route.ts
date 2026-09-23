@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     if (condition.provider !== providerId) return NextResponse.json({error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
 
     const requestConfig = await ReclaimProofRequest.init(appId,appSecret,providerId,{log:false});
-    requestConfig.setContext(context.paymentId, body.context);
+    requestConfig.setContext(context.paymentId, context.conditionHash);
 
     return NextResponse.json({
       request:requestConfig.toJsonString(),
