@@ -41,13 +41,13 @@ contract SettlevaTest is Test {
         settleva.createPayment(paymentId, payee, address(token), 100_000, uint64(block.timestamp + 1 days), conditionHash);
     }
 
-    function _context(bytes32 hash) internal pure returns (string memory) {
-        return string.concat('{"contextMessage":"', vm.toString(hash), '"}');
+    function _context(bytes32 id, bytes32 hash) internal pure returns (string memory) {
+        return string.concat('{"paymentId":"', vm.toString(id), '","conditionHash":"', vm.toString(hash), '"}');
     }
 
     function _proof() internal view returns (IReclaimVerifier.Proof memory proof) {
         proof.claimInfo.provider = "github";
-        proof.claimInfo.context = _context(conditionHash);
+        proof.claimInfo.context = _context(paymentId, conditionHash);
     }
 
     function testCreateLocksFunds() public {
@@ -74,7 +74,16 @@ contract SettlevaTest is Test {
     function testWrongConditionReverts() public {
         _create();
         IReclaimVerifier.Proof memory proof = _proof();
-        proof.claimInfo.context = _context(keccak256(bytes("wrong-condition")));
+        proof.claimInfo.context = _context(paymentId, keccak256(bytes("wrong-condition")));
+        vm.prank(payee);
+        vm.expectRevert(Settleva.ConditionMismatch.selector);
+        settleva.release(paymentId, proof);
+    }
+
+    function testWrongPaymentReverts() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        proof.claimInfo.context = _context(keccak256("other-payment"), conditionHash);
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
         settleva.release(paymentId, proof);
