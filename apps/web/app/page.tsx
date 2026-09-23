@@ -11,6 +11,8 @@ import { erc20Abi, settlevaAbi } from "./contracts";
 const ARC_CHAIN_ID = Number(process.env.NEXT_PUBLIC_ARC_CHAIN_ID || "5042");
 const ARC_RPC_URL = process.env.NEXT_PUBLIC_ARC_RPC_URL || "";
 const SETTLEVA_ADDRESS = (process.env.NEXT_PUBLIC_SETTLEVA_ADDRESS || "") as Address;
+const RECLAIM_PROVIDER_ID = process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_ID || "";
+const RECLAIM_PROVIDER_VERSION = process.env.NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION || "";
 
 declare global {
   interface Window { ethereum?: { request(args:{method:string;params?:unknown[]}):Promise<unknown> } }
@@ -28,7 +30,8 @@ export default function Home() {
   const [token,setToken] = useState("");
   const [amount,setAmount] = useState("1");
   const [expiresAt,setExpiresAt] = useState(String(Math.floor(Date.now()/1000)+86400));
-  const [provider,setProvider] = useState("github");
+  const [provider,setProvider] = useState(RECLAIM_PROVIDER_ID || "github");
+  const [providerVersion,setProviderVersion] = useState(RECLAIM_PROVIDER_VERSION);
   const [repository,setRepository] = useState("");
   const [ref,setRef] = useState("main");
   const [sha,setSha] = useState("");
@@ -48,6 +51,7 @@ export default function Home() {
   const condition = useMemo<PaymentCondition>(() => ({
     version:"1.0",
     provider,
+    providerVersion,
     claims:[
       {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.repository,operator:"equals",value:repository},
       {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.ref,operator:"equals",value:ref},
@@ -56,7 +60,7 @@ export default function Home() {
       {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.status,operator:"equals",value:status}
     ],
     expiresAt:Number(expiresAt)
-  }),[provider,repository,ref,sha,environment,status,expiresAt]);
+  }),[provider,providerVersion,repository,ref,sha,environment,status,expiresAt]);
 
   function prepare() {
     setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setSettlementTx("");
@@ -177,6 +181,7 @@ export default function Home() {
         </div>
         <h2 style={{marginTop:28}}>2. Define condition</h2>
         <div><label className="label">Reclaim provider ID</label><input value={provider} onChange={e=>setProvider(e.target.value)} placeholder="Configured Reclaim provider ID" /></div>
+        <div style={{marginTop:12}}><label className="label">Reclaim provider version</label><input value={providerVersion} onChange={e=>setProviderVersion(e.target.value)} placeholder="Exact pinned provider version" /></div>
         <div style={{marginTop:12}}><label className="label">GitHub repository</label><input value={repository} onChange={e=>setRepository(e.target.value)} placeholder="owner/repository" /></div>
         <div className="row" style={{marginTop:12}}>
           <div><label className="label">Deployment ref</label><input value={ref} onChange={e=>setRef(e.target.value)} placeholder="main" /></div>
