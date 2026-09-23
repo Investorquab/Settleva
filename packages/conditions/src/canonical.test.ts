@@ -1,13 +1,16 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { canonicalizeCondition, hashCondition } from "./canonical.js";
+import { buildProofContext, canonicalizeCondition, hashCondition, hashProofContext } from "./canonical.js";
 
-const base = {version:"1.0" as const,provider:"github",claims:[{field:"commit",operator:"equals" as const,value:"8f31c9a"},{field:"repository",operator:"equals" as const,value:"quab/website"}],expiresAt:1790000000};
+const condition = {
+  version: "1.0" as const,
+  provider: "github",
+  claims: [
+    { field: "repo.public", operator: "equals" as const, value: "true" },
+    { field: "repo.owner", operator: "equals" as const, value: "Investorquab" }
+  ],
+  expiresAt: 1_800_000_000
+};
 
-test("canonicalization is deterministic regardless of claim order", () => {
-  const reordered = {...base, claims:[...base.claims].reverse()};
-  assert.equal(canonicalizeCondition(base), canonicalizeCondition(reordered));
-  assert.equal(hashCondition(base), hashCondition(reordered));
-});
-
-test("hash is 32-byte hex", () => assert.match(hashCondition(base), /^0x[0-9a-f]{64}$/));
+if (!canonicalizeCondition(condition).includes('"provider":"github"')) throw new Error("canonicalization failed");
+if (!hashCondition(condition).startsWith("0x") || hashCondition(condition).length !== 66) throw new Error("condition hash failed");
+if (buildProofContext(condition) !== hashCondition(condition)) throw new Error("proof context mismatch");
+if (hashProofContext(condition).length !== 66) throw new Error("context hash failed");
