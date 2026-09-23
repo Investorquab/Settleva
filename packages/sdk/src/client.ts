@@ -1,5 +1,5 @@
 import type { PaymentCondition } from "@settleva/conditions";
-import { buildProofContext, hashCondition, hashProofContext } from "@settleva/conditions";
+import { buildProofContext, hashCondition } from "@settleva/conditions";
 import { derivePaymentId } from "./payment-id.js";
 
 export interface CreatePaymentInput {
@@ -15,7 +15,6 @@ export interface PreparedCreatePayment {
   readonly paymentId: `0x${string}`;
   readonly conditionHash: `0x${string}`;
   readonly proofContext: string;
-  readonly contextHash: `0x${string}`;
   readonly request: CreatePaymentInput;
 }
 
@@ -30,7 +29,6 @@ export function prepareCreatePayment(input: CreatePaymentInput): PreparedCreateP
     paymentId: derivePaymentId(input),
     conditionHash: hashCondition(input.condition),
     proofContext: buildProofContext(input.condition),
-    contextHash: hashProofContext(input.condition),
     request: input
   };
 }
