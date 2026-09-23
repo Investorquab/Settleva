@@ -3,6 +3,12 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@settleva/conditions": ["packages/conditions/src/index.ts"],
+      "@settleva/verification": ["packages/verification/src/index.ts"],
+      "@settleva/sdk": ["packages/sdk/src/index.ts"]
+    },
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
