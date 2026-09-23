@@ -1,1 +1,7 @@
-{"name":"@settleva/conditions","private":true,"version":"0.1.0","type":"module","scripts":{"check":"tsc --noEmit","test":"node --test","build":"tsc"}}
+{
+  "name":"@settleva/conditions",
+  "private":true,
+  "version":"0.1.0",
+  "type":"module",
+  "scripts":{"check":"tsc --noEmit","test":"tsc && node --test dist/**/*.test.js","build":"tsc"}
+}
