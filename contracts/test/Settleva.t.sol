@@ -26,6 +26,7 @@ contract SettlevaTest is Test {
     address private payee = address(0x2);
     bytes32 private paymentId = keccak256("payment-1");
     bytes32 private conditionHash = keccak256(bytes("canonical-condition"));
+    bytes32 private providerHash = keccak256(bytes("github"));
     bytes32 private proofIdentifier = keccak256("proof-1");
 
     function setUp() public {
@@ -39,7 +40,7 @@ contract SettlevaTest is Test {
 
     function _create() internal {
         vm.prank(payer);
-        settleva.createPayment(paymentId, payee, address(token), 100_000, uint64(block.timestamp + 1 days), conditionHash);
+        settleva.createPayment(paymentId, payee, address(token), 100_000, uint64(block.timestamp + 1 days), conditionHash, providerHash);
     }
 
     function _context(bytes32 id, bytes32 hash) internal pure returns (string memory) {
@@ -72,6 +73,15 @@ contract SettlevaTest is Test {
         assertTrue(settleva.usedProofIdentifiers(proofIdentifier));
         assertEq(token.balanceOf(payee), 100_000);
         assertEq(uint256(settleva.payments(paymentId).status), uint256(Settleva.Status.Released));
+    }
+
+    function testWrongProviderReverts() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        proof.claimInfo.provider = "http";
+        vm.prank(payee);
+        vm.expectRevert(Settleva.ProviderMismatch.selector);
+        settleva.release(paymentId, proof);
     }
 
     function testWrongConditionReverts() public {
@@ -108,7 +118,7 @@ contract SettlevaTest is Test {
 
         bytes32 secondPaymentId = keccak256("payment-2");
         vm.prank(payer);
-        settleva.createPayment(secondPaymentId, payee, address(token), 50_000, uint64(block.timestamp + 1 days), conditionHash);
+        settleva.createPayment(secondPaymentId, payee, address(token), 50_000, uint64(block.timestamp + 1 days), conditionHash, providerHash);
 
         IReclaimVerifier.Proof memory replay = _proof();
         replay.claimInfo.context = _context(secondPaymentId, conditionHash);
