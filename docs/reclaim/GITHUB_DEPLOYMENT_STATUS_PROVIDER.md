@@ -4,7 +4,7 @@
 
 Settleva's first reference evidence flow is a GitHub deployment condition. The provider must attest to the deployment data itself; a normal GitHub API response from Settleva is **not** a proof.
 
-GitHub exposes deployment objects containing the deployment SHA, ref, and environment, and deployment-status objects containing the deployment state. Public repository deployment resources can be read without authentication. citeturn0search1turn0search0
+GitHub exposes deployment objects containing the deployment SHA, ref, and environment, and deployment-status objects containing the deployment state. Public repository deployment resources can be read without authentication.
 
 ## Exact claims
 
@@ -31,7 +31,7 @@ Minimum selection inputs:
 
 The provider must not accept a URL supplied by the settlement backend as the authoritative evidence source. The provider configuration should resolve the GitHub API endpoint itself.
 
-For a deployment selected by ref/SHA/environment, GitHub's deployment endpoint supports filtering by `sha`, `ref`, and `environment`. Deployment status is then read from the deployment's status endpoint. citeturn0search1turn0search0
+For a deployment selected by ref/SHA/environment, GitHub's deployment endpoint supports filtering by `sha`, `ref`, and `environment`. Deployment status is then read from the deployment's status endpoint.
 
 ## Security requirements
 
