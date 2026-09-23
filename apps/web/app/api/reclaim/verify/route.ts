@@ -4,6 +4,7 @@ import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/
 import { buildVerificationAttestationHash } from "@settleva/sdk";
 import { keccak256, stringToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { findMatchingVerifiedProofData } from "../verified-data.js";
 
 export const runtime = "nodejs";
 
@@ -75,31 +76,22 @@ export async function POST(request: Request) {
     }
 
     const data = Array.isArray(result.data) ? result.data : [];
-    const contextMatchesSession = data.some((entry) => {
-      const context = (entry as {context?:unknown}).context;
-      if (!context || typeof context !== "object") return false;
-      return (context as {reclaimSessionId?:unknown}).reclaimSessionId === body.sessionId;
+    const matchingProof = findMatchingVerifiedProofData(data, {
+      sessionId: body.sessionId,
+      paymentId: committed.paymentId,
+      conditionHash: committed.conditionHash
     });
-    if (!contextMatchesSession) return NextResponse.json({verified:false,error:"Proof does not belong to the initiated Reclaim session."},{status:400});
-    const matchingProof = data.find((entry) => {
-      const extracted = (entry as {extractedParameters?:unknown}).extractedParameters;
-      return extracted && typeof extracted === "object";
-    });
-    if (!matchingProof) return NextResponse.json({verified:false,error:"Reclaim proof is valid but contains no verified extracted parameters."},{status:400});
+    if (!matchingProof) {
+      return NextResponse.json({
+        verified:false,
+        error:"Proof is not bound to the initiated Reclaim session, payment, condition, and verified extracted parameters."
+      },{status:400});
+    }
 
-    const extracted = (matchingProof as {extractedParameters:Record<string,unknown>}).extractedParameters;
+    const extracted = matchingProof.extractedParameters!;
     const claims = Object.entries(extracted).map(([field,value]) => ({field,value:String(value)}));
     const evaluation = evaluateClaims(condition,claims);
     if (!evaluation.valid) return NextResponse.json({verified:false,error:"Condition failed.",failures:evaluation.failures,claims},{status:400});
-
-    const contextMatches = data.some((entry) => {
-      const context = (entry as {context?:unknown}).context;
-      if (!context || typeof context !== "object") return false;
-      const item = context as {contextAddress?:unknown;contextMessage?:unknown};
-      return item.contextAddress === committed.paymentId
-        && item.contextMessage === committed.conditionHash;
-    });
-    if (!contextMatches) return NextResponse.json({verified:false,error:"Proof context does not match this Settleva payment."},{status:400});
 
     const account = privateKeyToAccount(verifierPrivateKey);
     const attestationHash = buildVerificationAttestationHash({
