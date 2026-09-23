@@ -7,7 +7,8 @@
     "paths":{
       "@settleva/conditions":["packages/conditions/src/index.ts"],
       "@settleva/sdk":["packages/sdk/src/index.ts"],
-      "@settleva/providers":["packages/providers/src/index.ts"]
+      "@settleva/providers":["packages/providers/src/index.ts"],
+      "@settleva/verification":["packages/verification/src/index.ts"]
     },
     "plugins":[{"name":"next"}]
   },
