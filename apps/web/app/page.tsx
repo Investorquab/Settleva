@@ -5,6 +5,7 @@ import { ReclaimProofRequest, transformForOnchain } from "@reclaimprotocol/js-sd
 import { createPublicClient, createWalletClient, custom, http, parseUnits, type Address, type Hex } from "viem";
 import { prepareCreatePayment } from "@settleva/sdk";
 import type { PaymentCondition } from "@settleva/conditions";
+import { GITHUB_DEPLOYMENT_CLAIM_FIELDS } from "@settleva/providers";
 import { erc20Abi, settlevaAbi } from "./contracts";
 
 const ARC_CHAIN_ID = Number(process.env.NEXT_PUBLIC_ARC_CHAIN_ID || "5042");
@@ -28,8 +29,11 @@ export default function Home() {
   const [amount,setAmount] = useState("1");
   const [expiresAt,setExpiresAt] = useState(String(Math.floor(Date.now()/1000)+86400));
   const [provider,setProvider] = useState("github");
-  const [field,setField] = useState("repo.public");
-  const [value,setValue] = useState("true");
+  const [repository,setRepository] = useState("");
+  const [ref,setRef] = useState("main");
+  const [sha,setSha] = useState("");
+  const [environment,setEnvironment] = useState("production");
+  const [status,setStatus] = useState("success");
   const [result,setResult] = useState<ReturnType<typeof prepareCreatePayment>|null>(null);
   const [error,setError] = useState("");
   const [txHash,setTxHash] = useState<Hex | "">("");
@@ -42,8 +46,17 @@ export default function Home() {
   const [settlementTx,setSettlementTx] = useState<Hex | "">("");
 
   const condition = useMemo<PaymentCondition>(() => ({
-    version:"1.0",provider,claims:[{field,operator:"equals",value}],expiresAt:Number(expiresAt)
-  }),[provider,field,value,expiresAt]);
+    version:"1.0",
+    provider,
+    claims:[
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.repository,operator:"equals",value:repository},
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.ref,operator:"equals",value:ref},
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.sha,operator:"equals",value:sha},
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.environment,operator:"equals",value:environment},
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.status,operator:"equals",value:status}
+    ],
+    expiresAt:Number(expiresAt)
+  }),[provider,repository,ref,sha,environment,status,expiresAt]);
 
   function prepare() {
     setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setSettlementTx("");
@@ -163,11 +176,17 @@ export default function Home() {
           <div><label className="label">Expiry (Unix seconds)</label><input value={expiresAt} onChange={e=>setExpiresAt(e.target.value)} /></div>
         </div>
         <h2 style={{marginTop:28}}>2. Define condition</h2>
-        <div><label className="label">Proof provider</label><input value={provider} onChange={e=>setProvider(e.target.value)} /></div>
+        <div><label className="label">Reclaim provider ID</label><input value={provider} onChange={e=>setProvider(e.target.value)} placeholder="Configured Reclaim provider ID" /></div>
+        <div style={{marginTop:12}}><label className="label">GitHub repository</label><input value={repository} onChange={e=>setRepository(e.target.value)} placeholder="owner/repository" /></div>
         <div className="row" style={{marginTop:12}}>
-          <div><label className="label">Claim field</label><input value={field} onChange={e=>setField(e.target.value)} /></div>
-          <div><label className="label">Required value</label><input value={value} onChange={e=>setValue(e.target.value)} /></div>
+          <div><label className="label">Deployment ref</label><input value={ref} onChange={e=>setRef(e.target.value)} placeholder="main" /></div>
+          <div><label className="label">Deployment SHA</label><input value={sha} onChange={e=>setSha(e.target.value)} placeholder="40-character commit SHA" /></div>
         </div>
+        <div className="row" style={{marginTop:12}}>
+          <div><label className="label">Environment</label><input value={environment} onChange={e=>setEnvironment(e.target.value)} placeholder="production" /></div>
+          <div><label className="label">Required deployment status</label><input value={status} onChange={e=>setStatus(e.target.value)} placeholder="success" /></div>
+        </div>
+        <p className="muted" style={{marginTop:12}}>The condition commits the repository, ref, commit SHA, environment and deployment status. A GitHub API response alone is not accepted as proof.</p>
         <div style={{display:"flex",gap:10,marginTop:20}}>
           <button onClick={prepare}>Prepare commitment</button>
           <button onClick={()=>void connectWallet()}>Connect wallet</button>
