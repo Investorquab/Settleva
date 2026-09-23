@@ -56,6 +56,11 @@ contract SettlevaTest is Test {
         proof.signedClaim.claim.identifier = proofIdentifier;
     }
 
+    function _status(bytes32 id) internal view returns (uint256) {
+        (, , , , , , , uint8 status) = settleva.payments(id);
+        return uint256(status);
+    }
+
     function _signature(IReclaimVerifier.Proof memory proof, uint256 privateKey) internal returns (bytes memory) {
         bytes32 digest = keccak256(
             abi.encode(paymentId, conditionHash, providerHash, proof.signedClaim.claim.identifier)
@@ -67,7 +72,7 @@ contract SettlevaTest is Test {
     function testCreateLocksFunds() public {
         _create();
         assertEq(token.balanceOf(address(settleva)), 100_000);
-        assertEq(uint256(settleva.payments(paymentId).status), uint256(Settleva.Status.Funded));
+        assertEq(_status(paymentId), uint256(Settleva.Status.Funded));
     }
 
     function testReleaseRequiresPayee() public {
@@ -92,7 +97,7 @@ contract SettlevaTest is Test {
         assertTrue(verifier.verified());
         assertTrue(settleva.usedProofIdentifiers(proofIdentifier));
         assertEq(token.balanceOf(payee), 100_000);
-        assertEq(uint256(settleva.payments(paymentId).status), uint256(Settleva.Status.Released));
+        assertEq(_status(paymentId), uint256(Settleva.Status.Released));
     }
 
     function testWrongVerificationSignerReverts() public {
@@ -178,7 +183,7 @@ contract SettlevaTest is Test {
         vm.prank(payer);
         settleva.refund(paymentId);
         assertEq(token.balanceOf(payer), 1_000_000);
-        assertEq(uint256(settleva.payments(paymentId).status), uint256(Settleva.Status.Refunded));
+        assertEq(_status(paymentId), uint256(Settleva.Status.Refunded));
     }
 
     function testCannotRefundBeforeExpiry() public {
