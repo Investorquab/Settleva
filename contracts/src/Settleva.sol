@@ -5,12 +5,7 @@ import "./IReclaimVerifier.sol";
 import "./ISettlementToken.sol";
 
 contract Settleva {
-    enum Status {
-        None,
-        Funded,
-        Released,
-        Refunded
-    }
+    enum Status { None, Funded, Released, Refunded }
 
     struct Payment {
         address payer;
@@ -53,16 +48,7 @@ contract Settleva {
     mapping(bytes32 => Payment) public payments;
     IReclaimVerifier public immutable verifier;
 
-    event PaymentCreated(
-        bytes32 indexed paymentId,
-        address indexed payer,
-        address indexed payee,
-        address token,
-        uint256 amount,
-        uint64 expiry,
-        bytes32 conditionHash
-    );
-
+    event PaymentCreated(bytes32 indexed paymentId, address indexed payer, address indexed payee, address token, uint256 amount, uint64 expiry, bytes32 conditionHash);
     event PaymentReleased(bytes32 indexed paymentId, address indexed payee, uint256 amount);
     event PaymentRefunded(bytes32 indexed paymentId, address indexed payer, uint256 amount);
 
@@ -71,14 +57,7 @@ contract Settleva {
         verifier = IReclaimVerifier(verifier_);
     }
 
-    function createPayment(
-        bytes32 paymentId,
-        address payee,
-        address token,
-        uint256 amount,
-        uint64 expiry,
-        bytes32 conditionHash
-    ) external {
+    function createPayment(bytes32 paymentId, address payee, address token, uint256 amount, uint64 expiry, bytes32 conditionHash) external {
         if (paymentId == bytes32(0)) revert InvalidPayment();
         if (payee == address(0) || token == address(0)) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
@@ -86,9 +65,7 @@ contract Settleva {
         if (conditionHash == bytes32(0)) revert ConditionMismatch();
         if (payments[paymentId].status != Status.None) revert AlreadyExists();
 
-        if (!ISettlementToken(token).transferFrom(msg.sender, address(this), amount)) {
-            revert TokenTransferFailed();
-        }
+        if (!ISettlementToken(token).transferFrom(msg.sender, address(this), amount)) revert TokenTransferFailed();
 
         payments[paymentId] = Payment({
             payer: msg.sender,
@@ -100,21 +77,10 @@ contract Settleva {
             status: Status.Funded
         });
 
-        emit PaymentCreated(
-            paymentId,
-            msg.sender,
-            payee,
-            token,
-            amount,
-            expiry,
-            conditionHash
-        );
+        emit PaymentCreated(paymentId, msg.sender, payee, token, amount, expiry, conditionHash);
     }
 
-    function release(
-        bytes32 paymentId,
-        IReclaimVerifier.Proof calldata proof
-    ) external {
+    function release(bytes32 paymentId, IReclaimVerifier.Proof calldata proof) external {
         Payment storage payment = payments[paymentId];
         if (payment.status != Status.Funded) revert InvalidStatus();
         if (block.timestamp >= payment.expiry) revert Expired();
@@ -122,19 +88,20 @@ contract Settleva {
 
         verifier.verifyProof(proof);
 
-        bytes memory expectedContextMessage = bytes(
-            string.concat('"contextMessage":"', _toHex(payment.conditionHash), '"')
+        bytes memory paymentBinding = bytes(
+            string.concat(
+                '"paymentId":"',
+                _toHex(paymentId),
+                '","conditionHash":"',
+                _toHex(payment.conditionHash),
+                '"'
+            )
         );
-        if (!_contains(bytes(proof.claimInfo.context), expectedContextMessage)) {
-            revert ConditionMismatch();
-        }
+        if (!_contains(bytes(proof.claimInfo.context), paymentBinding)) revert ConditionMismatch();
 
         payment.status = Status.Released;
 
-        if (!ISettlementToken(payment.token).transfer(payment.payee, payment.amount)) {
-            revert TokenTransferFailed();
-        }
-
+        if (!ISettlementToken(payment.token).transfer(payment.payee, payment.amount)) revert TokenTransferFailed();
         emit PaymentReleased(paymentId, payment.payee, payment.amount);
     }
 
@@ -157,11 +124,7 @@ contract Settleva {
         if (msg.sender != payment.payer) revert NotPayer();
 
         payment.status = Status.Refunded;
-
-        if (!ISettlementToken(payment.token).transfer(payment.payer, payment.amount)) {
-            revert TokenTransferFailed();
-        }
-
+        if (!ISettlementToken(payment.token).transfer(payment.payer, payment.amount)) revert TokenTransferFailed();
         emit PaymentRefunded(paymentId, payment.payer, payment.amount);
     }
 }
