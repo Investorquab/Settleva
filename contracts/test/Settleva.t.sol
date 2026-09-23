@@ -57,7 +57,7 @@ contract SettlevaTest is Test {
     }
 
     function _status(bytes32 id) internal view returns (uint256) {
-        (, , , , , , , uint8 status) = settleva.payments(id);
+        (, , , , , , , Settleva.Status status) = settleva.payments(id);
         return uint256(status);
     }
 
