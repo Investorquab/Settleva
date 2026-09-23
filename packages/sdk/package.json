@@ -1,1 +1,8 @@
-{"name":"@settleva/sdk","private":true,"version":"0.1.0","type":"module","scripts":{"check":"tsc --noEmit","test":"node --test","build":"tsc"},"dependencies":{"@settleva/conditions":"workspace:*"}}
+{
+  "name":"@settleva/sdk",
+  "private":true,
+  "version":"0.1.0",
+  "type":"module",
+  "scripts":{"check":"tsc --noEmit","test":"tsc","build":"tsc"},
+  "dependencies":{"@settleva/conditions":"workspace:*"}
+}
