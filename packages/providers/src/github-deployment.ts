@@ -32,6 +32,7 @@ export function buildGitHubDeploymentCondition(
   return {
     version: "1.0",
     provider: input.provider,
+    providerVersion: input.providerVersion,
     claims,
     expiresAt: input.expiresAt
   };
