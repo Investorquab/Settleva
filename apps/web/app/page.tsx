@@ -100,7 +100,7 @@ export default function Home() {
       const units=parseUnits(result.request.amount,decimals);
       const approveHash=await walletClient.writeContract({account,address:result.request.token,abi:erc20Abi,functionName:"approve",args:[SETTLEVA_ADDRESS,units]});
       await publicClient.waitForTransactionReceipt({hash:approveHash});
-      const hash=await walletClient.writeContract({account,address:SETTLEVA_ADDRESS,abi:settlevaAbi,functionName:"createPayment",args:[result.paymentId,result.request.payee,result.request.token,units,BigInt(result.request.expiry),result.conditionHash]});
+      const hash=await walletClient.writeContract({account,address:SETTLEVA_ADDRESS,abi:settlevaAbi,functionName:"createPayment",args:[result.paymentId,result.request.payee,result.request.token,units,BigInt(result.request.expiry),result.conditionHash,result.providerHash]});
       setTxHash(hash);
       await publicClient.waitForTransactionReceipt({hash});
     } catch (e) { setError(e instanceof Error ? e.message : "Funding transaction failed."); }
