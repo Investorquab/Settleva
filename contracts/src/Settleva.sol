@@ -14,6 +14,7 @@ contract Settleva {
         uint256 amount;
         uint64 expiry;
         bytes32 conditionHash;
+        bytes32 providerHash;
         Status status;
     }
 
@@ -28,6 +29,7 @@ contract Settleva {
     error Expired();
     error InvalidStatus();
     error ConditionMismatch();
+    error ProviderMismatch();
     error ProofAlreadyUsed();
     error TokenTransferFailed();
 
@@ -50,7 +52,7 @@ contract Settleva {
     mapping(bytes32 => bool) public usedProofIdentifiers;
     IReclaimVerifier public immutable verifier;
 
-    event PaymentCreated(bytes32 indexed paymentId, address indexed payer, address indexed payee, address token, uint256 amount, uint64 expiry, bytes32 conditionHash);
+    event PaymentCreated(bytes32 indexed paymentId, address indexed payer, address indexed payee, address token, uint256 amount, uint64 expiry, bytes32 conditionHash, bytes32 providerHash);
     event PaymentReleased(bytes32 indexed paymentId, address indexed payee, uint256 amount);
     event PaymentRefunded(bytes32 indexed paymentId, address indexed payer, uint256 amount);
 
@@ -59,12 +61,20 @@ contract Settleva {
         verifier = IReclaimVerifier(verifier_);
     }
 
-    function createPayment(bytes32 paymentId, address payee, address token, uint256 amount, uint64 expiry, bytes32 conditionHash) external {
+    function createPayment(
+        bytes32 paymentId,
+        address payee,
+        address token,
+        uint256 amount,
+        uint64 expiry,
+        bytes32 conditionHash,
+        bytes32 providerHash
+    ) external {
         if (paymentId == bytes32(0)) revert InvalidPayment();
         if (payee == address(0) || token == address(0)) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
         if (expiry <= block.timestamp) revert InvalidExpiry();
-        if (conditionHash == bytes32(0)) revert ConditionMismatch();
+        if (conditionHash == bytes32(0) || providerHash == bytes32(0)) revert ConditionMismatch();
         if (payments[paymentId].status != Status.None) revert AlreadyExists();
 
         if (!ISettlementToken(token).transferFrom(msg.sender, address(this), amount)) revert TokenTransferFailed();
@@ -76,10 +86,11 @@ contract Settleva {
             amount: amount,
             expiry: expiry,
             conditionHash: conditionHash,
+            providerHash: providerHash,
             status: Status.Funded
         });
 
-        emit PaymentCreated(paymentId, msg.sender, payee, token, amount, expiry, conditionHash);
+        emit PaymentCreated(paymentId, msg.sender, payee, token, amount, expiry, conditionHash, providerHash);
     }
 
     function release(bytes32 paymentId, IReclaimVerifier.Proof calldata proof) external {
@@ -88,6 +99,8 @@ contract Settleva {
         if (block.timestamp >= payment.expiry) revert Expired();
         if (msg.sender != payment.payee) revert NotPayee();
         if (usedProofIdentifiers[proof.signedClaim.claim.identifier]) revert ProofAlreadyUsed();
+
+        if (keccak256(bytes(proof.claimInfo.provider)) != payment.providerHash) revert ProviderMismatch();
 
         verifier.verifyProof(proof);
 
