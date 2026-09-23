@@ -18,6 +18,11 @@ contract Settleva {
         Status status;
     }
 
+    mapping(bytes32 => Payment) public payments;
+    mapping(bytes32 => bool) public usedProofIdentifiers;
+    IReclaimVerifier public immutable verifier;
+    address public immutable verificationSigner;
+
     error InvalidPayment();
     error InvalidAddress();
     error InvalidAmount();
@@ -31,34 +36,17 @@ contract Settleva {
     error ConditionMismatch();
     error ProviderMismatch();
     error ProofAlreadyUsed();
+    error InvalidVerificationSignature();
     error TokenTransferFailed();
-
-    function _contains(bytes memory haystack, bytes memory needle) private pure returns (bool) {
-        if (needle.length == 0 || haystack.length < needle.length) return false;
-        for (uint256 i = 0; i <= haystack.length - needle.length; i++) {
-            bool match_ = true;
-            for (uint256 j = 0; j < needle.length; j++) {
-                if (haystack[i + j] != needle[j]) {
-                    match_ = false;
-                    break;
-                }
-            }
-            if (match_) return true;
-        }
-        return false;
-    }
-
-    mapping(bytes32 => Payment) public payments;
-    mapping(bytes32 => bool) public usedProofIdentifiers;
-    IReclaimVerifier public immutable verifier;
 
     event PaymentCreated(bytes32 indexed paymentId, address indexed payer, address indexed payee, address token, uint256 amount, uint64 expiry, bytes32 conditionHash, bytes32 providerHash);
     event PaymentReleased(bytes32 indexed paymentId, address indexed payee, uint256 amount);
     event PaymentRefunded(bytes32 indexed paymentId, address indexed payer, uint256 amount);
 
-    constructor(address verifier_) {
-        if (verifier_ == address(0)) revert InvalidAddress();
+    constructor(address verifier_, address verificationSigner_) {
+        if (verifier_ == address(0) || verificationSigner_ == address(0)) revert InvalidAddress();
         verifier = IReclaimVerifier(verifier_);
+        verificationSigner = verificationSigner_;
     }
 
     function createPayment(
@@ -93,7 +81,11 @@ contract Settleva {
         emit PaymentCreated(paymentId, msg.sender, payee, token, amount, expiry, conditionHash, providerHash);
     }
 
-    function release(bytes32 paymentId, IReclaimVerifier.Proof calldata proof) external {
+    function release(
+        bytes32 paymentId,
+        IReclaimVerifier.Proof calldata proof,
+        bytes calldata verificationSignature
+    ) external {
         Payment storage payment = payments[paymentId];
         if (payment.status != Status.Funded) revert InvalidStatus();
         if (block.timestamp >= payment.expiry) revert Expired();
@@ -114,11 +106,71 @@ contract Settleva {
         if (!_contains(signedContext, contextAddressBinding)) revert ConditionMismatch();
         if (!_contains(signedContext, contextMessageBinding)) revert ConditionMismatch();
 
+        bytes32 attestationHash = keccak256(
+            abi.encode(
+                paymentId,
+                payment.conditionHash,
+                payment.providerHash,
+                proof.signedClaim.claim.identifier
+            )
+        );
+        if (_recoverSigner(attestationHash, verificationSignature) != verificationSigner) {
+            revert InvalidVerificationSignature();
+        }
+
         usedProofIdentifiers[proof.signedClaim.claim.identifier] = true;
         payment.status = Status.Released;
 
         if (!ISettlementToken(payment.token).transfer(payment.payee, payment.amount)) revert TokenTransferFailed();
         emit PaymentReleased(paymentId, payment.payee, payment.amount);
+    }
+
+    function verificationAttestationHash(
+        bytes32 paymentId,
+        bytes32 conditionHash,
+        bytes32 providerHash,
+        bytes32 proofIdentifier
+    ) external pure returns (bytes32) {
+        return keccak256(abi.encode(paymentId, conditionHash, providerHash, proofIdentifier));
+    }
+
+    function _recoverSigner(bytes32 messageHash, bytes memory signature) private pure returns (address) {
+        if (signature.length != 65) return address(0);
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := mload(add(signature, 32))
+            s := mload(add(signature, 64))
+            v := byte(0, mload(add(signature, 96)))
+        }
+
+        if (v < 27) v += 27;
+        if (v != 27 && v != 28) return address(0);
+
+        // secp256k1n / 2. Reject malleable high-s signatures.
+        if (uint256(s) > 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0) {
+            return address(0);
+        }
+
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        return ecrecover(digest, v, r, s);
+    }
+
+    function _contains(bytes memory haystack, bytes memory needle) private pure returns (bool) {
+        if (needle.length == 0 || haystack.length < needle.length) return false;
+        for (uint256 i = 0; i <= haystack.length - needle.length; i++) {
+            bool match_ = true;
+            for (uint256 j = 0; j < needle.length; j++) {
+                if (haystack[i + j] != needle[j]) {
+                    match_ = false;
+                    break;
+                }
+            }
+            if (match_) return true;
+        }
+        return false;
     }
 
     function _toHex(bytes32 value) private pure returns (string memory) {
