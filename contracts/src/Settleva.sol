@@ -36,6 +36,21 @@ contract Settleva {
     error ConditionMismatch();
     error TokenTransferFailed();
 
+    function _contains(bytes memory haystack, bytes memory needle) private pure returns (bool) {
+        if (needle.length == 0 || haystack.length < needle.length) return false;
+        for (uint256 i = 0; i <= haystack.length - needle.length; i++) {
+            bool match_ = true;
+            for (uint256 j = 0; j < needle.length; j++) {
+                if (haystack[i + j] != needle[j]) {
+                    match_ = false;
+                    break;
+                }
+            }
+            if (match_) return true;
+        }
+        return false;
+    }
+
     mapping(bytes32 => Payment) public payments;
     IReclaimVerifier public immutable verifier;
 
@@ -110,7 +125,7 @@ contract Settleva {
 
         verifier.verifyProof(proof);
 
-        if (keccak256(bytes(proof.claimInfo.context)) != payment.contextHash) {
+        if (!_contains(bytes(proof.claimInfo.context), bytes(_toHex(payment.conditionHash)))) {
             revert ConditionMismatch();
         }
 
@@ -121,6 +136,18 @@ contract Settleva {
         }
 
         emit PaymentReleased(paymentId, payment.payee, payment.amount);
+    }
+
+    function _toHex(bytes32 value) private pure returns (string memory) {
+        bytes memory buffer = new bytes(66);
+        buffer[0] = "0";
+        buffer[1] = "x";
+        bytes16 symbols = "0123456789abcdef";
+        for (uint256 i = 0; i < 32; i++) {
+            buffer[2 + i * 2] = symbols[uint8(value[i] >> 4)];
+            buffer[3 + i * 2] = symbols[uint8(value[i] & 0x0f)];
+        }
+        return string(buffer);
     }
 
     function refund(bytes32 paymentId) external {
