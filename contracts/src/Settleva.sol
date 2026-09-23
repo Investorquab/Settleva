@@ -88,16 +88,15 @@ contract Settleva {
 
         verifier.verifyProof(proof);
 
-        bytes memory paymentBinding = bytes(
-            string.concat(
-                '"paymentId":"',
-                _toHex(paymentId),
-                '","conditionHash":"',
-                _toHex(payment.conditionHash),
-                '"'
-            )
+        bytes memory contextAddressBinding = bytes(
+            string.concat('"contextAddress":"', _toHex(paymentId), '"')
         );
-        if (!_contains(bytes(proof.claimInfo.context), paymentBinding)) revert ConditionMismatch();
+        bytes memory contextMessageBinding = bytes(
+            string.concat('"contextMessage":"', _toHex(payment.conditionHash), '"')
+        );
+        bytes memory signedContext = bytes(proof.claimInfo.context);
+        if (!_contains(signedContext, contextAddressBinding)) revert ConditionMismatch();
+        if (!_contains(signedContext, contextMessageBinding)) revert ConditionMismatch();
 
         payment.status = Status.Released;
 
