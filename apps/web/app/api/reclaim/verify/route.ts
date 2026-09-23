@@ -34,11 +34,12 @@ function parseProofContext(value: string): {paymentId:string;conditionHash:Hex} 
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as {proofs?:unknown;expectedContext?:string;condition?:unknown};
+    const body = await request.json() as {proofs?:unknown;expectedContext?:string;condition?:unknown;sessionId?:string};
     if (!Array.isArray(body.proofs) || body.proofs.length !== 1) {
       return NextResponse.json({error:"Exactly one Reclaim proof is required for this payment condition."},{status:400});
     }
     if (typeof body.expectedContext !== "string") return NextResponse.json({error:"Expected proof context is required."},{status:400});
+    if (typeof body.sessionId !== "string" || body.sessionId.length < 8) return NextResponse.json({error:"The Reclaim session ID is required."},{status:400});
     if (!isPaymentCondition(body.condition)) return NextResponse.json({error:"The exact payment condition is required."},{status:400});
 
     const condition = body.condition;
@@ -74,6 +75,12 @@ export async function POST(request: Request) {
     }
 
     const data = Array.isArray(result.data) ? result.data : [];
+    const contextMatchesSession = data.some((entry) => {
+      const context = (entry as {context?:unknown}).context;
+      if (!context || typeof context !== "object") return false;
+      return (context as {reclaimSessionId?:unknown}).reclaimSessionId === body.sessionId;
+    });
+    if (!contextMatchesSession) return NextResponse.json({verified:false,error:"Proof does not belong to the initiated Reclaim session."},{status:400});
     const matchingProof = data.find((entry) => {
       const extracted = (entry as {extractedParameters?:unknown}).extractedParameters;
       return extracted && typeof extracted === "object";
