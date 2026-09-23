@@ -10,6 +10,7 @@ export const GITHUB_DEPLOYMENT_CLAIM_FIELDS = {
 
 export interface GitHubDeploymentConditionInput {
   readonly provider: string;
+  readonly providerVersion: string;
   readonly repository: string;
   readonly ref: string;
   readonly sha: string;
