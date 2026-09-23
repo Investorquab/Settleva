@@ -79,7 +79,7 @@ contract SettlevaTest is Test {
 
     function _proof() internal pure returns (IReclaimVerifier.Proof memory proof) {
         proof.claimInfo.provider = "github";
-        proof.claimInfo.context = "github:merged:123";
+        proof.claimInfo.context = string.concat("github:merged:123:", vm.toString(conditionHash));
     }
 
     function testCreateLocksFunds() public {
@@ -110,7 +110,7 @@ contract SettlevaTest is Test {
         _create();
 
         IReclaimVerifier.Proof memory proof = _proof();
-        proof.claimInfo.context = "github:merged:wrong";
+        proof.claimInfo.context = string.concat("github:merged:wrong:", vm.toString(conditionHash));
 
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
