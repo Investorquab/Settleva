@@ -43,11 +43,18 @@ export async function POST(request: Request) {
     const appId = process.env.RECLAIM_APP_ID;
     const appSecret = process.env.RECLAIM_APP_SECRET;
     const configuredProviderId = process.env.RECLAIM_PROVIDER_ID;
-    if (!appId || !appSecret || !configuredProviderId) return NextResponse.json({error:"Reclaim server credentials are not configured."},{status:503});
+    const configuredProviderVersion = process.env.RECLAIM_PROVIDER_VERSION;
+    if (!appId || !appSecret || !configuredProviderId || !configuredProviderVersion) {
+      return NextResponse.json({error:"Reclaim server credentials and the pinned provider version are not configured."},{status:503});
+    }
     if (condition.provider !== configuredProviderId) return NextResponse.json({verified:false,error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
 
     const requestConfig = await ReclaimProofRequest.init(appId,appSecret,configuredProviderId,{log:false});
     const {providerId,providerVersion} = requestConfig.getProviderVersion();
+    if (providerId !== configuredProviderId || providerVersion !== configuredProviderVersion) {
+      return NextResponse.json({verified:false,error:"Configured Reclaim provider version does not match the provider version resolved for this request."},{status:503});
+    }
+
     const result = await verifyProof(body.proofs,{providerId,providerVersion});
     if (!result.isVerified) return NextResponse.json({verified:false,error:result.error?.message || "Reclaim rejected the proof."},{status:400});
 
