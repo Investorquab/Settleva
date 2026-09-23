@@ -94,6 +94,25 @@ export async function POST(request: Request) {
     }
 
     const rawProofs = body.proofs as Array<Record<string, unknown>>;
+    const parameterMatches = rawProofs.some((proof) => {
+      const claimData = proof.claimData as Record<string, unknown> | undefined;
+      const parameters = claimData?.parameters;
+      if (typeof parameters !== "string") return false;
+      try {
+        const parsed = JSON.parse(parameters) as Record<string, unknown>;
+        return parsed.settlevaConditionHash === body.expectedContext;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!parameterMatches) {
+      return NextResponse.json({
+        verified:false,
+        error:"Reclaim proof parameters are not bound to this Settleva condition."
+      }, { status:400 });
+    }
+
     const contextMatches = rawProofs.some((proof) => {
       const claimInfo = proof.claimInfo as Record<string, unknown> | undefined;
       const nestedClaimInfo = proof.claimData as Record<string, unknown> | undefined;
