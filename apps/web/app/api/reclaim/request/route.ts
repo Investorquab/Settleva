@@ -46,16 +46,24 @@ export async function POST(request: Request) {
     const appId = process.env.RECLAIM_APP_ID;
     const appSecret = process.env.RECLAIM_APP_SECRET;
     const providerId = process.env.RECLAIM_PROVIDER_ID;
-    if (!appId || !appSecret || !providerId) return NextResponse.json({error:"Reclaim server credentials are not configured."},{status:503});
+    const configuredProviderVersion = process.env.RECLAIM_PROVIDER_VERSION;
+    if (!appId || !appSecret || !providerId || !configuredProviderVersion) {
+      return NextResponse.json({error:"Reclaim server credentials and the pinned provider version are not configured."},{status:503});
+    }
     if (condition.provider !== providerId) return NextResponse.json({error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
 
     const requestConfig = await ReclaimProofRequest.init(appId,appSecret,providerId,{log:false});
+    const {providerId:resolvedProviderId,providerVersion} = requestConfig.getProviderVersion();
+    if (resolvedProviderId !== providerId || providerVersion !== configuredProviderVersion) {
+      return NextResponse.json({error:"Configured Reclaim provider version does not match the provider version resolved for this request."},{status:503});
+    }
+
     requestConfig.setContext(context.paymentId, context.conditionHash);
 
     return NextResponse.json({
       request:requestConfig.toJsonString(),
-      providerId:requestConfig.getProviderVersion().providerId,
-      providerVersion:requestConfig.getProviderVersion().providerVersion
+      providerId:resolvedProviderId,
+      providerVersion
     });
   } catch (error) {
     return NextResponse.json({error:error instanceof Error ? error.message:"Could not create Reclaim request."},{status:500});
