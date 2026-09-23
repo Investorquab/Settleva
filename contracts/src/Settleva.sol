@@ -28,6 +28,7 @@ contract Settleva {
     error Expired();
     error InvalidStatus();
     error ConditionMismatch();
+    error ProofAlreadyUsed();
     error TokenTransferFailed();
 
     function _contains(bytes memory haystack, bytes memory needle) private pure returns (bool) {
@@ -46,6 +47,7 @@ contract Settleva {
     }
 
     mapping(bytes32 => Payment) public payments;
+    mapping(bytes32 => bool) public usedProofIdentifiers;
     IReclaimVerifier public immutable verifier;
 
     event PaymentCreated(bytes32 indexed paymentId, address indexed payer, address indexed payee, address token, uint256 amount, uint64 expiry, bytes32 conditionHash);
@@ -85,6 +87,7 @@ contract Settleva {
         if (payment.status != Status.Funded) revert InvalidStatus();
         if (block.timestamp >= payment.expiry) revert Expired();
         if (msg.sender != payment.payee) revert NotPayee();
+        if (usedProofIdentifiers[proof.signedClaim.claim.identifier]) revert ProofAlreadyUsed();
 
         verifier.verifyProof(proof);
 
@@ -98,6 +101,7 @@ contract Settleva {
         if (!_contains(signedContext, contextAddressBinding)) revert ConditionMismatch();
         if (!_contains(signedContext, contextMessageBinding)) revert ConditionMismatch();
 
+        usedProofIdentifiers[proof.signedClaim.claim.identifier] = true;
         payment.status = Status.Released;
 
         if (!ISettlementToken(payment.token).transfer(payment.payee, payment.amount)) revert TokenTransferFailed();
