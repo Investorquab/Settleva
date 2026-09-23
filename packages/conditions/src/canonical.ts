@@ -9,6 +9,7 @@ function compareClaims(a: ConditionClaim, b: ConditionClaim): number {
 export function canonicalizeCondition(condition: PaymentCondition): string {
   if (condition.version !== "1.0") throw new Error("Unsupported condition version");
   if (!condition.provider) throw new Error("Condition provider is required");
+  if (!condition.providerVersion) throw new Error("Condition provider version is required");
   if (!Number.isSafeInteger(condition.expiresAt) || condition.expiresAt < 0) {
     throw new Error("expiresAt must be a non-negative safe integer");
   }
@@ -23,6 +24,7 @@ export function canonicalizeCondition(condition: PaymentCondition): string {
   return JSON.stringify({
     version: condition.version,
     provider: condition.provider,
+    providerVersion: condition.providerVersion,
     claims,
     expiresAt: condition.expiresAt
   });
