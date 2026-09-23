@@ -21,6 +21,9 @@ export async function POST(request: Request) {
       log: false
     });
     requestConfig.setContext(context);
+    requestConfig.setParams({
+      settlevaConditionHash: context
+    });
 
     return NextResponse.json({
       request: requestConfig.toJsonString(),
