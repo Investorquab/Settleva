@@ -127,7 +127,7 @@ export default function Home() {
     setError(""); setSettling(true);
     try {
       if(!result || !proof || !proofVerified) throw new Error("Verify the Reclaim proof first.");
-      const raw=proof[0] as Record<string,unknown>;
+      const raw=proof[0] as Parameters<typeof transformForOnchain>[0];
       const transformed=transformForOnchain(raw);
       const {walletClient,publicClient}=arcClients();
       const accounts=await window.ethereum?.request({method:"eth_requestAccounts"}) as string[];
