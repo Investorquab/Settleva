@@ -8,6 +8,7 @@ import {
 test("GitHub deployment condition commits all five deployment claims", () => {
   const condition = buildGitHubDeploymentCondition({
     provider: "reclaim-provider-id",
+    providerVersion: "1.0.0",
     repository: "Investorquab/Settleva",
     ref: "main",
     sha: "0123456789abcdef0123456789abcdef01234567",
@@ -28,6 +29,7 @@ test("GitHub deployment condition commits all five deployment claims", () => {
 test("GitHub deployment condition cannot silently omit a committed field", () => {
   const condition = buildGitHubDeploymentCondition({
     provider: "reclaim-provider-id",
+    providerVersion: "1.0.0",
     repository: "Investorquab/Settleva",
     ref: "main",
     sha: "0123456789abcdef0123456789abcdef01234567",
