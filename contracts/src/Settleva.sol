@@ -19,7 +19,6 @@ contract Settleva {
         uint256 amount;
         uint64 expiry;
         bytes32 conditionHash;
-        bytes32 contextHash;
         Status status;
     }
 
@@ -79,13 +78,12 @@ contract Settleva {
         uint256 amount,
         uint64 expiry,
         bytes32 conditionHash,
-        bytes32 contextHash
     ) external {
         if (paymentId == bytes32(0)) revert InvalidPayment();
         if (payee == address(0) || token == address(0)) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
         if (expiry <= block.timestamp) revert InvalidExpiry();
-        if (conditionHash == bytes32(0) || contextHash == bytes32(0)) revert ConditionMismatch();
+        if (conditionHash == bytes32(0)) revert ConditionMismatch();
         if (payments[paymentId].status != Status.None) revert AlreadyExists();
 
         if (!ISettlementToken(token).transferFrom(msg.sender, address(this), amount)) {
@@ -99,7 +97,6 @@ contract Settleva {
             amount: amount,
             expiry: expiry,
             conditionHash: conditionHash,
-            contextHash: contextHash,
             status: Status.Funded
         });
 
