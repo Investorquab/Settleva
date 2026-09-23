@@ -26,6 +26,7 @@ contract SettlevaTest is Test {
     address private payee = address(0x2);
     bytes32 private paymentId = keccak256("payment-1");
     bytes32 private conditionHash = keccak256(bytes("canonical-condition"));
+    bytes32 private proofIdentifier = keccak256("proof-1");
 
     function setUp() public {
         verifier = new MockVerifier();
@@ -48,6 +49,7 @@ contract SettlevaTest is Test {
     function _proof() internal view returns (IReclaimVerifier.Proof memory proof) {
         proof.claimInfo.provider = "github";
         proof.claimInfo.context = _context(paymentId, conditionHash);
+        proof.signedClaim.claim.identifier = proofIdentifier;
     }
 
     function testCreateLocksFunds() public {
@@ -67,6 +69,7 @@ contract SettlevaTest is Test {
         vm.prank(payee);
         settleva.release(paymentId, _proof());
         assertTrue(verifier.verified());
+        assertTrue(settleva.usedProofIdentifiers(proofIdentifier));
         assertEq(token.balanceOf(payee), 100_000);
         assertEq(uint256(settleva.payments(paymentId).status), uint256(Settleva.Status.Released));
     }
@@ -96,6 +99,23 @@ contract SettlevaTest is Test {
         vm.prank(payee);
         vm.expectRevert(Settleva.InvalidStatus.selector);
         settleva.release(paymentId, _proof());
+    }
+
+    function testProofIdentifierCannotBeReusedAcrossPayments() public {
+        _create();
+        vm.prank(payee);
+        settleva.release(paymentId, _proof());
+
+        bytes32 secondPaymentId = keccak256("payment-2");
+        vm.prank(payer);
+        settleva.createPayment(secondPaymentId, payee, address(token), 50_000, uint64(block.timestamp + 1 days), conditionHash);
+
+        IReclaimVerifier.Proof memory replay = _proof();
+        replay.claimInfo.context = _context(secondPaymentId, conditionHash);
+
+        vm.prank(payee);
+        vm.expectRevert(Settleva.ProofAlreadyUsed.selector);
+        settleva.release(secondPaymentId, replay);
     }
 
     function testRefundAfterExpiry() public {
