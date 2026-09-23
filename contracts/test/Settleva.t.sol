@@ -65,7 +65,8 @@ contract SettlevaTest is Test {
         bytes32 digest = keccak256(
             abi.encode(paymentId, conditionHash, providerHash, proof.signedClaim.claim.identifier)
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        bytes32 ethSignedDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, ethSignedDigest);
         return abi.encodePacked(r, s, v);
     }
 
