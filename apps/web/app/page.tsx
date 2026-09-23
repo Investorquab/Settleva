@@ -43,6 +43,7 @@ export default function Home() {
   const [proofStatus,setProofStatus] = useState("");
   const [proof,setProof] = useState<unknown[]|null>(null);
   const [proofVerified,setProofVerified] = useState(false);
+  const [verificationSignature,setVerificationSignature] = useState<Hex | "">("");
   const [funding,setFunding] = useState(false);
   const [verifying,setVerifying] = useState(false);
   const [settling,setSettling] = useState(false);
@@ -63,7 +64,7 @@ export default function Home() {
   }),[provider,providerVersion,repository,ref,sha,environment,status,expiresAt]);
 
   function prepare() {
-    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setSettlementTx("");
+    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setVerificationSignature(""); setSettlementTx("");
     try {
       if (!payer || !payee || !token) throw new Error("Enter payer, payee and token addresses.");
       setResult(prepareCreatePayment({payer:payer as Address,payee:payee as Address,token:token as Address,amount,expiry:Number(expiresAt),condition}));
@@ -132,8 +133,9 @@ export default function Home() {
     try {
       if(!result || !proof) throw new Error("Generate a proof first.");
       const response=await fetch("/api/reclaim/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({proofs:proof,expectedContext:result.proofContext,condition:result.request.condition})});
-      const body=await response.json() as {verified?:boolean;error?:string};
-      if(!response.ok || !body.verified) throw new Error(body.error || "Proof verification failed.");
+      const body=await response.json() as {verified?:boolean;error?:string;verificationSignature?:Hex};
+      if(!response.ok || !body.verified || !body.verificationSignature) throw new Error(body.error || "Proof verification failed.");
+      setVerificationSignature(body.verificationSignature);
       setProofVerified(true);
       setProofStatus("Server-side Reclaim verification passed.");
     } catch(e){setError(e instanceof Error?e.message:"Proof verification failed.");}
@@ -143,7 +145,7 @@ export default function Home() {
   async function settlePayment() {
     setError(""); setSettling(true);
     try {
-      if(!result || !proof || !proofVerified) throw new Error("Verify the Reclaim proof first.");
+      if(!result || !proof || !proofVerified || !verificationSignature) throw new Error("Verify the Reclaim proof first.");
       const raw=proof[0] as Parameters<typeof transformForOnchain>[0];
       const transformed=transformForOnchain(raw);
       const {walletClient,publicClient}=arcClients();
@@ -152,7 +154,7 @@ export default function Home() {
       if(!account || account.toLowerCase()!==result.request.payee.toLowerCase()) throw new Error("Connect the payee wallet to settle this payment.");
       const hash=await walletClient.writeContract({
         account,address:SETTLEVA_ADDRESS,abi:settlevaAbi,functionName:"release",
-        args:[result.paymentId,transformed]
+        args:[result.paymentId,transformed,verificationSignature]
       });
       setSettlementTx(hash);
       await publicClient.waitForTransactionReceipt({hash});
