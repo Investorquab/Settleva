@@ -42,7 +42,7 @@ contract SettlevaTest is Test {
     }
 
     function _context(bytes32 id, bytes32 hash) internal pure returns (string memory) {
-        return string.concat('{"paymentId":"', vm.toString(id), '","conditionHash":"', vm.toString(hash), '"}');
+        return string.concat('{"contextAddress":"', vm.toString(id), '","contextMessage":"', vm.toString(hash), '"}');
     }
 
     function _proof() internal view returns (IReclaimVerifier.Proof memory proof) {
