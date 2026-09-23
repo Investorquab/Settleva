@@ -19,7 +19,7 @@ function isPaymentCondition(value: unknown): value is PaymentCondition {
     );
 }
 
-function parseProofContext(value: string): {paymentId:string;conditionHash:`0x${string`} | null {
+function parseProofContext(value: string): {paymentId:string;conditionHash:`0x${string}`} | null {
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (typeof parsed.paymentId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(parsed.paymentId)) return null;
