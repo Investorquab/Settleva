@@ -1,5 +1,5 @@
 import type { PaymentCondition } from "@settleva/conditions";
-import { buildProofContext, hashCondition } from "@settleva/conditions";
+import { hashCondition } from "@settleva/conditions";
 import { derivePaymentId } from "./payment-id.js";
 
 export interface CreatePaymentInput {
@@ -25,10 +25,9 @@ export function prepareCreatePayment(input: CreatePaymentInput): PreparedCreateP
   if (!/^\d+(?:\.\d+)?$/.test(input.amount) || input.amount === "0") throw new Error("amount must be a positive decimal string");
   if (!Number.isSafeInteger(input.expiry) || input.expiry <= 0) throw new Error("expiry must be a positive safe integer");
 
-  return {
-    paymentId: derivePaymentId(input),
-    conditionHash: hashCondition(input.condition),
-    proofContext: buildProofContext(input.condition),
-    request: input
-  };
+  const paymentId = derivePaymentId(input);
+  const conditionHash = hashCondition(input.condition);
+  const proofContext = JSON.stringify({paymentId, conditionHash});
+
+  return {paymentId, conditionHash, proofContext, request:input};
 }
