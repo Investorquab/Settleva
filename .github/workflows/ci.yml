@@ -19,3 +19,17 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm -r check
       - run: pnpm -r test
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+      - name: Install forge-std
+        working-directory: contracts
+        run: forge install foundry-rs/forge-std --no-commit
+      - name: Run Foundry tests
+        working-directory: contracts
+        run: forge test -vvv
