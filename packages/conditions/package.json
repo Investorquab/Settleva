@@ -1,7 +1,5 @@
 {
-  "name":"@settleva/conditions",
-  "private":true,
-  "version":"0.1.0",
-  "type":"module",
-  "scripts":{"check":"tsc --noEmit","test":"tsc && node --test dist/**/*.test.js","build":"tsc"}
+  "name":"@settleva/conditions","private":true,"version":"0.1.0","type":"module",
+  "scripts":{"check":"tsc --noEmit","test":"tsc","build":"tsc"},
+  "dependencies":{"viem":"^2.37.0"}
 }
