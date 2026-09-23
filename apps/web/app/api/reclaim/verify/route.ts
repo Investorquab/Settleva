@@ -113,11 +113,12 @@ export async function POST(request: Request) {
       }, { status:400 });
     }
 
-    const contextMatches = rawProofs.some((proof) => {
-      const claimInfo = proof.claimInfo as Record<string, unknown> | undefined;
-      const nestedClaimInfo = proof.claimData as Record<string, unknown> | undefined;
-      const context = claimInfo?.context ?? nestedClaimInfo?.context;
-      return context === body.expectedContext;
+    const contextMatches = data.some((entry) => {
+      const context = (entry as { context?: unknown }).context;
+      if (!context || typeof context !== "object") return false;
+      const message = (context as { message?: unknown; contextMessage?: unknown }).message
+        ?? (context as { contextMessage?: unknown }).contextMessage;
+      return message === body.expectedContext;
     });
 
     if (!contextMatches) {
