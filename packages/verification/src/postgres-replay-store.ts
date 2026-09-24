@@ -46,13 +46,19 @@ export class PostgresReplayStore implements ReplayStore {
       `;
 
       const accepted = await sql`
-        select count(*)::int as count
+        select session_id, proof_identifier, payment_id, condition_hash
         from settleva_reclaim_replay
         where (identifier_type = 'session' and identifier = ${binding.sessionId})
            or (identifier_type = 'proof' and identifier = ${binding.proofIdentifier})
+        for update
       `;
 
-      return Number(accepted[0]?.count) === 2;
+      return accepted.length === 2 && accepted.every((row) =>
+        row.session_id === binding.sessionId &&
+        row.proof_identifier === binding.proofIdentifier &&
+        row.payment_id === binding.paymentId &&
+        row.condition_hash === binding.conditionHash
+      );
     });
   }
 
