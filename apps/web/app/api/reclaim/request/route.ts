@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
     const sessions = new ReclaimSessionStore(databaseUrl);
     try {
-      await sessions.create({
+      const created = await sessions.create({
         sessionId,
         paymentId:context.paymentId,
         conditionHash:context.conditionHash,
@@ -89,6 +89,7 @@ export async function POST(request: Request) {
         providerVersion,
         statusTokenHash
       });
+      if (!created) throw new Error("Reclaim session ID collision; request was not created.");
     } finally {
       await sessions.close();
     }
