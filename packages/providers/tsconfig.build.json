@@ -1,0 +1,12 @@
+{
+  "extends":"./tsconfig.json",
+  "compilerOptions":{
+    "rootDir":"src",
+    "outDir":"dist",
+    "paths":{
+      "@settleva/conditions":["../conditions/dist/index.d.ts"],
+      "@settleva/verification":["../verification/dist/index.d.ts"]
+    }
+  },
+  "include":["src/**/*.ts"]
+}
