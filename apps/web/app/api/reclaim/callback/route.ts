@@ -57,7 +57,15 @@ export async function POST(request: Request) {
           if (currentStatus === "verified") {
             return NextResponse.json({received:true,verified:true,sessionId});
           }
-          throw error;
+          // Replay acceptance may already have succeeded. A persistence failure
+          // after that point must remain retryable; marking the session failed
+          // would permanently strand an otherwise accepted proof.
+          throw new ReclaimVerificationError(
+            "DATABASE",
+            error instanceof Error
+              ? `Verification succeeded but session state could not be persisted: ${error.message}`
+              : "Verification succeeded but session state could not be persisted."
+          );
         }
         const commitStatus = resolveVerificationCommit(transitioned, transitioned ? "verified" : (await sessions.get(sessionId))?.status ?? null);
         if (commitStatus === "already-committed") {
