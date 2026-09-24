@@ -50,7 +50,7 @@ export function extractGitHubDeploymentClaims(
   const environment = values.get(GITHUB_DEPLOYMENT_CLAIM_FIELDS.environment);
   const status = values.get(GITHUB_DEPLOYMENT_CLAIM_FIELDS.status);
   if (!repository || !ref || !sha || !environment || !status) return null;
-  if (!/^[^/]+\\/[^/]+$/.test(repository) || !/^[0-9a-fA-F]{40}$/.test(sha)) return null;
+  if (!/^[^/]+\/[^/]+$/.test(repository) || !/^[0-9a-fA-F]{40}$/.test(sha)) return null;
   return {repository, ref, sha, environment, status};
 }
 
