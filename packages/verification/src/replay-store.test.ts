@@ -32,3 +32,26 @@ test("keeps session and proof bindings tied to payment and condition", async () 
   assert.equal(await store.claim(binding), true);
   assert.equal(await store.claim({...binding, sessionId:"session-2", proofIdentifier:"0xproof2", paymentId:"0xpayment2"}), true);
 });
+
+
+test("concurrent attempts accept only one identical binding", async () => {
+  const store = new InMemoryReplayStore();
+  const results = await Promise.all(
+    Array.from({length: 32}, () => store.claim(binding))
+  );
+  assert.equal(results.filter(Boolean).length, 1);
+});
+
+test("a new session/proof pair may be accepted for a different payment", async () => {
+  const store = new InMemoryReplayStore();
+  assert.equal(await store.claim(binding), true);
+  assert.equal(
+    await store.claim({
+      ...binding,
+      sessionId: "session-2",
+      proofIdentifier: "0xproof2",
+      paymentId: "0xpayment2"
+    }),
+    true
+  );
+});
