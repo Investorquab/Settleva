@@ -2,7 +2,8 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
   GITHUB_DEPLOYMENT_CLAIM_FIELDS,
-  buildGitHubDeploymentCondition
+  buildGitHubDeploymentCondition,
+  extractGitHubDeploymentClaims
 } from "./github-deployment.js";
 
 test("GitHub deployment condition commits all five deployment claims", () => {
@@ -73,4 +74,30 @@ test("GitHub deployment condition rejects expired commitments", () => {
     status: "success",
     expiresAt: 1
   }), /future Unix timestamp/);
+});
+
+test("GitHub deployment claim extraction requires the complete five-field evidence set", () => {
+  const claims = Object.values(GITHUB_DEPLOYMENT_CLAIM_FIELDS).map((field, index) => ({
+    field,
+    value: index === 0 ? "Investorquab/Settleva" : index === 1 ? "main" : index === 2 ? "0123456789abcdef0123456789abcdef01234567" : index === 3 ? "production" : "success"
+  }));
+  assert.deepEqual(extractGitHubDeploymentClaims(claims), {
+    repository:"Investorquab/Settleva",
+    ref:"main",
+    sha:"0123456789abcdef0123456789abcdef01234567",
+    environment:"production",
+    status:"success"
+  });
+});
+
+test("GitHub deployment claim extraction rejects partial evidence", () => {
+  assert.equal(
+    extractGitHubDeploymentClaims([
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.repository,value:"Investorquab/Settleva"},
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.ref,value:"main"},
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.sha,value:"0123456789abcdef0123456789abcdef01234567"},
+      {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.environment,value:"production"}
+    ]),
+    null
+  );
 });
