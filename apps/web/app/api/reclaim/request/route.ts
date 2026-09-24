@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
-import { ReclaimSessionStore } from "../../../lib/reclaim-session-store.js";
+import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
 
 export const runtime = "nodejs";
 
