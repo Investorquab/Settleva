@@ -48,7 +48,17 @@ export async function POST(request: Request) {
           expectedProviderVersion:session.providerVersion
         });
 
-        await sessions.markVerified(sessionId,result.proof,result.proofIdentifier,result.verificationSignature);
+        const transitioned = await sessions.markVerified(sessionId,result.proof,result.proofIdentifier,result.verificationSignature);
+        if (!transitioned) {
+          const current = await sessions.get(sessionId);
+          if (current?.status === "verified") {
+            return NextResponse.json({received:true,verified:true,sessionId});
+          }
+          return NextResponse.json(
+            {received:true,verified:false,sessionId,error:"Reclaim session changed state before verification could be committed."},
+            {status:409}
+          );
+        }
         return NextResponse.json({received:true,verified:true,sessionId});
       } catch (error) {
         const message = error instanceof Error ? error.message : "Reclaim verification failed.";
