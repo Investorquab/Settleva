@@ -19,9 +19,23 @@ export interface GitHubDeploymentConditionInput {
   readonly expiresAt: number;
 }
 
+function assertDeploymentInput(input: GitHubDeploymentConditionInput): void {
+  if (!input.provider.trim()) throw new Error("Reclaim provider ID is required.");
+  if (!input.providerVersion.trim()) throw new Error("Reclaim provider version is required.");
+  if (!/^[^/]+\/[^/]+$/.test(input.repository)) throw new Error("GitHub repository must use owner/name format.");
+  if (!input.ref.trim()) throw new Error("GitHub deployment ref is required.");
+  if (!/^[0-9a-fA-F]{40}$/.test(input.sha)) throw new Error("GitHub deployment SHA must be a 40-character hexadecimal commit SHA.");
+  if (!input.environment.trim()) throw new Error("GitHub deployment environment is required.");
+  if (!input.status.trim()) throw new Error("GitHub deployment status is required.");
+  if (!Number.isSafeInteger(input.expiresAt) || input.expiresAt <= Math.floor(Date.now() / 1000)) {
+    throw new Error("GitHub deployment condition expiry must be a future Unix timestamp.");
+  }
+}
+
 export function buildGitHubDeploymentCondition(
   input: GitHubDeploymentConditionInput
 ): PaymentCondition {
+  assertDeploymentInput(input);
   const claims: ConditionClaim[] = [
     {field: GITHUB_DEPLOYMENT_CLAIM_FIELDS.repository, operator: "equals", value: input.repository},
     {field: GITHUB_DEPLOYMENT_CLAIM_FIELDS.ref, operator: "equals", value: input.ref},
