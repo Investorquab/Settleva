@@ -16,7 +16,9 @@
     "viem": "^2.37.0",
     "next": "^15.5.4",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "@settleva/verification": "workspace:*",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
