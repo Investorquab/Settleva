@@ -24,7 +24,7 @@ export class ReclaimSessionStore {
   }
 
   async create(record: Omit<ReclaimSessionRecord, "status">): Promise<boolean> {
-    await this.sql`
+    const result = await this.sql`
       insert into settleva_reclaim_sessions
         (session_id, payment_id, condition_hash, condition, provider_id, provider_version, status_token_hash, status)
       values
