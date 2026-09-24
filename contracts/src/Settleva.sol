@@ -36,6 +36,7 @@ contract Settleva {
     error ConditionMismatch();
     error ProviderMismatch();
     error ProofAlreadyUsed();
+    error InvalidProofIdentifier();
     error InvalidVerificationSignature();
     error TokenTransferFailed();
 
@@ -90,11 +91,11 @@ contract Settleva {
         if (payment.status != Status.Funded) revert InvalidStatus();
         if (block.timestamp >= payment.expiry) revert Expired();
         if (msg.sender != payment.payee) revert NotPayee();
-        if (usedProofIdentifiers[proof.signedClaim.claim.identifier]) revert ProofAlreadyUsed();
+        bytes32 proofIdentifier = proof.signedClaim.claim.identifier;
+        if (proofIdentifier == bytes32(0)) revert InvalidProofIdentifier();
+        if (usedProofIdentifiers[proofIdentifier]) revert ProofAlreadyUsed();
 
         if (keccak256(bytes(proof.claimInfo.provider)) != payment.providerHash) revert ProviderMismatch();
-
-        verifier.verifyProof(proof);
 
         bytes memory contextAddressBinding = bytes(
             string.concat('"contextAddress":"', _toHex(paymentId), '"')
@@ -106,19 +107,24 @@ contract Settleva {
         if (!_contains(signedContext, contextAddressBinding)) revert ConditionMismatch();
         if (!_contains(signedContext, contextMessageBinding)) revert ConditionMismatch();
 
+        // Reject malformed/mis-bound context before crossing the external verifier
+        // trust boundary. The verifier is only called after local payment bindings
+        // have been established.
+        verifier.verifyProof(proof);
+
         bytes32 attestationHash = keccak256(
             abi.encode(
                 paymentId,
                 payment.conditionHash,
                 payment.providerHash,
-                proof.signedClaim.claim.identifier
+                proofIdentifier
             )
         );
         if (_recoverSigner(attestationHash, verificationSignature) != verificationSigner) {
             revert InvalidVerificationSignature();
         }
 
-        usedProofIdentifiers[proof.signedClaim.claim.identifier] = true;
+        usedProofIdentifiers[proofIdentifier] = true;
         payment.status = Status.Released;
 
         if (!ISettlementToken(payment.token).transfer(payment.payee, payment.amount)) revert TokenTransferFailed();
