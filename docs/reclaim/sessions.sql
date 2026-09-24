@@ -16,3 +16,7 @@ create table if not exists settleva_reclaim_sessions (
 
 create index if not exists settleva_reclaim_sessions_payment_idx
   on settleva_reclaim_sessions (payment_id);
+
+-- Existing deployments: add a per-session secret used only for status polling.
+alter table settleva_reclaim_sessions
+  add column if not exists status_token_hash text;
