@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
     requestConfig.setAppCallbackUrl(callbackUrl, true);
     requestConfig.setContext(context.paymentId, context.conditionHash);
     const sessionId = requestConfig.getSessionId();
+    const statusToken = randomBytes(32).toString("base64url");
+    const statusTokenHash = createHash("sha256").update(statusToken).digest("hex");
 
     const sessions = new ReclaimSessionStore(databaseUrl);
     try {
@@ -77,7 +80,8 @@ export async function POST(request: Request) {
         conditionHash:context.conditionHash,
         condition,
         providerId:resolvedProviderId,
-        providerVersion
+        providerVersion,
+        statusTokenHash
       });
     } finally {
       await sessions.close();
@@ -86,6 +90,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       request:requestConfig.toJsonString(),
       sessionId,
+      statusToken,
       providerId:resolvedProviderId,
       providerVersion
     });
