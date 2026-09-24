@@ -141,6 +141,37 @@ contract SettlevaTest is Test {
         assertFalse(verifier.verified());
     }
 
+    function testContextMustMatchExactCommittedJson() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        proof.claimInfo.context = string.concat(
+            '{"paymentId":"', vm.toString(paymentId),
+            '","conditionHash":"', vm.toString(conditionHash),
+            '","extra":"not-committed"}'
+        );
+        vm.prank(payee);
+        vm.expectRevert(Settleva.ConditionMismatch.selector);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertFalse(verifier.verified());
+    }
+
+    function testVerificationAttestationHelperMatchesReleaseDigest() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        bytes32 expected = keccak256(
+            abi.encode(paymentId, conditionHash, providerHash, proof.signedClaim.claim.identifier)
+        );
+        assertEq(
+            settleva.verificationAttestationHash(
+                paymentId,
+                conditionHash,
+                providerHash,
+                proof.signedClaim.claim.identifier
+            ),
+            expected
+        );
+    }
+
     function testWrongPaymentReverts() public {
         _create();
         IReclaimVerifier.Proof memory proof = _proof();
