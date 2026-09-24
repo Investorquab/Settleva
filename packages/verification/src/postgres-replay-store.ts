@@ -10,55 +10,33 @@ export class PostgresReplayStore implements ReplayStore {
 
   async claim(binding: ReplayBinding): Promise<boolean> {
     return this.sql.begin(async (sql) => {
-      const existing = await sql`
-        select identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash
-        from settleva_reclaim_replay
-        where (identifier_type = 'session' and identifier = ${binding.sessionId})
-           or (identifier_type = 'proof' and identifier = ${binding.proofIdentifier})
-        for update
-      `;
-
-      for (const row of existing) {
-        if (
-          row.session_id !== binding.sessionId ||
-          row.proof_identifier !== binding.proofIdentifier ||
-          row.payment_id !== binding.paymentId ||
-          row.condition_hash !== binding.conditionHash
-        ) {
-          return false;
-        }
-      }
-
-      await sql`
+      // The session row is the ownership token for this verification attempt.
+      // RETURNING makes concurrent identical claims mutually exclusive: only the
+      // transaction that inserts the session row may proceed to the proof row.
+      const sessionInsert = await sql`
         insert into settleva_reclaim_replay
           (identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash)
         values
           ('session', ${binding.sessionId}, ${binding.sessionId}, ${binding.proofIdentifier}, ${binding.paymentId}, ${binding.conditionHash})
         on conflict do nothing
+        returning identifier
       `;
 
-      await sql`
+      if (sessionInsert.length !== 1) return false;
+
+      // The proof identifier is a second independent uniqueness boundary.
+      const proofInsert = await sql`
         insert into settleva_reclaim_replay
           (identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash)
         values
           ('proof', ${binding.proofIdentifier}, ${binding.sessionId}, ${binding.proofIdentifier}, ${binding.paymentId}, ${binding.conditionHash})
         on conflict do nothing
+        returning identifier
       `;
 
-      const accepted = await sql`
-        select session_id, proof_identifier, payment_id, condition_hash
-        from settleva_reclaim_replay
-        where (identifier_type = 'session' and identifier = ${binding.sessionId})
-           or (identifier_type = 'proof' and identifier = ${binding.proofIdentifier})
-        for update
-      `;
-
-      return accepted.length === 2 && accepted.every((row) =>
-        row.session_id === binding.sessionId &&
-        row.proof_identifier === binding.proofIdentifier &&
-        row.payment_id === binding.paymentId &&
-        row.condition_hash === binding.conditionHash
-      );
+      // If the proof identifier was concurrently accepted elsewhere, this
+      // transaction fails closed and rolls back its session ownership token.
+      return proofInsert.length === 1;
     });
   }
 
