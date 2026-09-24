@@ -1,30 +1,29 @@
-export interface ReplayStore {
-  /**
-   * Atomically records a Reclaim session as accepted.
-   * Returns false when the session was already accepted.
-   */
-  claimSession(sessionId: string): Promise<boolean>;
+export interface ReplayBinding {
+  readonly sessionId: string;
+  readonly proofIdentifier: string;
+  readonly paymentId: string;
+  readonly conditionHash: string;
+}
 
-  /**
-   * Atomically records a proof identifier as accepted.
-   * Returns false when the proof identifier was already accepted.
-   */
-  claimProof(proofIdentifier: string): Promise<boolean>;
+/**
+ * Atomically accepts the session/proof pair for one payment condition.
+ * Returns false when either identifier has already been accepted.
+ */
+export interface ReplayStore {
+  claim(binding: ReplayBinding): Promise<boolean>;
 }
 
 export class InMemoryReplayStore implements ReplayStore {
-  private readonly sessions = new Set<string>();
-  private readonly proofs = new Set<string>();
+  private readonly sessions = new Map<string, ReplayBinding>();
+  private readonly proofs = new Map<string, ReplayBinding>();
 
-  async claimSession(sessionId: string): Promise<boolean> {
-    if (this.sessions.has(sessionId)) return false;
-    this.sessions.add(sessionId);
-    return true;
-  }
+  async claim(binding: ReplayBinding): Promise<boolean> {
+    if (this.sessions.has(binding.sessionId) || this.proofs.has(binding.proofIdentifier)) {
+      return false;
+    }
 
-  async claimProof(proofIdentifier: string): Promise<boolean> {
-    if (this.proofs.has(proofIdentifier)) return false;
-    this.proofs.add(proofIdentifier);
+    this.sessions.set(binding.sessionId, binding);
+    this.proofs.set(binding.proofIdentifier, binding);
     return true;
   }
 }
