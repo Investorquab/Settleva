@@ -10,7 +10,7 @@ Settleva additionally binds the proof to the funded payment by checking:
 
 1. The proof provider hash matches the funded provider.
 2. Reclaim accepts the proof.
-3. The signed Reclaim context is the exact context committed for the funded payment: `contextAddress = paymentId` and `contextMessage = conditionHash`.
+3. The signed Reclaim context binds the funded payment: `contextAddress = paymentId` and `contextMessage = conditionHash`. Reclaim may include additional signed context metadata (such as session/extracted data), so Settleva does not require whole-object JSON serialization to remain byte-for-byte identical.
 4. The proof identifier has not already been used.
 
 ## Semantic verification boundary
