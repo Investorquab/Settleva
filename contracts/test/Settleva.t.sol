@@ -129,13 +129,14 @@ contract SettlevaTest is Test {
         settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
     }
 
-    function testWrongConditionReverts() public {
+    function testWrongConditionRevertsBeforeVerifierCall() public {
         _create();
         IReclaimVerifier.Proof memory proof = _proof();
         proof.claimInfo.context = _context(paymentId, keccak256(bytes("wrong-condition")));
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
         settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertFalse(verifier.verified());
     }
 
     function testWrongPaymentReverts() public {
@@ -145,6 +146,34 @@ contract SettlevaTest is Test {
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
         settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+    }
+
+    function testReleaseAfterExpiryRevertsBeforeVerifierCall() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(payee);
+        vm.expectRevert(Settleva.Expired.selector);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertFalse(verifier.verified());
+    }
+
+    function testZeroProofIdentifierRevertsBeforeVerifierCall() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        proof.signedClaim.claim.identifier = bytes32(0);
+        vm.prank(payee);
+        vm.expectRevert(Settleva.InvalidProofIdentifier.selector);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertFalse(verifier.verified());
+    }
+
+    function testMalformedSignatureReverts() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        vm.prank(payee);
+        vm.expectRevert(Settleva.InvalidVerificationSignature.selector);
+        settleva.release(paymentId, proof, hex"010203");
     }
 
     function testCannotReleaseTwice() public {
