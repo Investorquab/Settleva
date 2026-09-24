@@ -6,6 +6,8 @@ import "../src/Settleva.sol";
 
 contract DeploySettleva is Script {
     function run() external returns (Settleva settleva) {
+        require(block.chainid == 5042, "wrong chain: expected Arc mainnet");
+
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address reclaimVerifier = vm.envAddress("RECLAIM_VERIFIER");
         address verificationSigner = vm.envAddress("VERIFICATION_SIGNER");
