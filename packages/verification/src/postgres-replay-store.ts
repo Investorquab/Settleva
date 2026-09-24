@@ -46,9 +46,3 @@ export class PostgresReplayStore implements ReplayStore {
   }
 }
 
-class ReplayConflictError extends Error {
-  constructor() {
-    super("Replay identifier already accepted.");
-    this.name = "ReplayConflictError";
-  }
-}
