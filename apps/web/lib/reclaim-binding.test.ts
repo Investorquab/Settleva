@@ -1,10 +1,11 @@
-// @ts-expect-error Node runs this test directly from the TypeScript source.\nimport { strict as assert } from "node:assert";
+// @ts-expect-error Node runs this test directly from the TypeScript source.\nimport assert from "node:assert/strict";
+import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
   extractedParametersToClaims,
   parseProofContext,
   parseProofIdentifier
-} from "./reclaim-binding.ts";
+} from "./reclaim-binding";
 
 test("parseProofContext accepts the exact payment and condition binding", () => {
   const context = JSON.stringify({
