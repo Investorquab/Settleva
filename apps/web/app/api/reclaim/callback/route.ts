@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
-import { verifyReclaimAndAttest } from "../../../../lib/reclaim-verification.js";
+import { ReclaimVerificationError, verifyReclaimAndAttest } from "../../../../lib/reclaim-verification.js";
 
 export const runtime = "nodejs";
 
@@ -62,7 +62,8 @@ export async function POST(request: Request) {
         return NextResponse.json({received:true,verified:true,sessionId});
       } catch (error) {
         const message = error instanceof Error ? error.message : "Reclaim verification failed.";
-        if (!message.includes("database") && !message.includes("already been accepted")) {
+        const retryable = error instanceof ReclaimVerificationError && (error.code === "DATABASE" || error.code === "REPLAY");
+        if (!retryable) {
           await sessions.markFailed(sessionId,message);
         }
         return NextResponse.json({received:true,verified:false,error:message},{status:400});
