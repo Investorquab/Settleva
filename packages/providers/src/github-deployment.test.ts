@@ -3,7 +3,8 @@ import { test } from "node:test";
 import {
   GITHUB_DEPLOYMENT_CLAIM_FIELDS,
   buildGitHubDeploymentCondition,
-  extractGitHubDeploymentClaims
+  extractGitHubDeploymentClaims,
+  isGitHubDeploymentCondition
 } from "./github-deployment.js";
 
 test("GitHub deployment condition commits all five deployment claims", () => {
@@ -99,5 +100,27 @@ test("GitHub deployment claim extraction rejects partial evidence", () => {
       {field:GITHUB_DEPLOYMENT_CLAIM_FIELDS.environment,value:"production"}
     ]),
     null
+  );
+});
+
+test("GitHub deployment condition shape guard rejects missing claim fields", () => {
+  const condition = buildGitHubDeploymentCondition({
+    provider: "reclaim-provider-id",
+    providerVersion: "1.0.0",
+    repository: "Investorquab/Settleva",
+    ref: "main",
+    sha: "0123456789abcdef0123456789abcdef01234567",
+    environment: "production",
+    status: "success",
+    expiresAt: 1_800_000_000
+  });
+
+  assert.equal(isGitHubDeploymentCondition(condition), true);
+  assert.equal(
+    isGitHubDeploymentCondition({
+      ...condition,
+      claims: condition.claims.slice(0, 4)
+    }),
+    false
   );
 });
