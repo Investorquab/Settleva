@@ -103,9 +103,9 @@ contract Settleva {
         bytes32 expectedContextHash = keccak256(
             bytes(
                 string.concat(
-                    '{"paymentId":"',
+                    '{"contextAddress":"',
                     _toHex(paymentId),
-                    '","conditionHash":"',
+                    '","contextMessage":"',
                     _toHex(payment.conditionHash),
                     '"}'
                 )
