@@ -1,6 +1,7 @@
 import { ReclaimProofRequest, verifyProof } from "@reclaimprotocol/js-sdk";
 import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/conditions";
 import { buildVerificationAttestationHash } from "@settleva/sdk";
+import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
 import { findMatchingVerifiedProofData, PostgresReplayStore } from "@settleva/verification";
 import { keccak256, stringToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -73,6 +74,14 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   if (!parsedContext || parsedContext.paymentId !== input.expectedPaymentId || parsedContext.conditionHash !== input.expectedConditionHash) throw new Error("Verified proof context does not match the committed payment binding.");
 
   const claims = Object.entries(matchingProof.extractedParameters!).map(([field,value]) => ({field,value:String(value)}));
+
+  // The first production provider is intentionally schema-pinned: when the
+  // committed condition is the GitHub deployment condition, require the
+  // complete five-field deployment evidence shape before evaluation.
+  if (isGitHubDeploymentCondition(input.condition) && !extractGitHubDeploymentClaims(claims)) {
+    throw new Error("GitHub deployment evidence is incomplete or malformed.");
+  }
+
   const evaluation = evaluateClaims(input.condition,claims);
   if (!evaluation.valid) throw new Error(`Condition failed: ${evaluation.failures.join(", ")}`);
 
