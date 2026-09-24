@@ -16,6 +16,7 @@ function isPaymentCondition(value: unknown): value is PaymentCondition {
     && condition.providerVersion.trim().length > 0
     && Array.isArray(condition.claims)
     && condition.claims.length > 0
+    && typeof condition.expiresAt === "number"
     && Number.isSafeInteger(condition.expiresAt)
     && condition.expiresAt > Math.floor(Date.now() / 1000)
     && condition.claims.every((claim) =>
