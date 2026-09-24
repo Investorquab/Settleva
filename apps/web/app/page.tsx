@@ -45,6 +45,7 @@ export default function Home() {
   const [proofVerified,setProofVerified] = useState(false);
   const [verificationSignature,setVerificationSignature] = useState<Hex | "">("");
   const [reclaimSessionId,setReclaimSessionId] = useState("");
+  const [reclaimStatusToken,setReclaimStatusToken] = useState("");
   const [funding,setFunding] = useState(false);
   const [verifying,setVerifying] = useState(false);
   const [settling,setSettling] = useState(false);
@@ -65,7 +66,7 @@ export default function Home() {
   }),[provider,providerVersion,repository,ref,sha,environment,status,expiresAt]);
 
   function prepare() {
-    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setVerificationSignature(""); setReclaimSessionId(""); setSettlementTx("");
+    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setVerificationSignature(""); setReclaimSessionId(""); setReclaimStatusToken(""); setSettlementTx("");
     try {
       if (!payer || !payee || !token) throw new Error("Enter payer, payee and token addresses.");
       setResult(prepareCreatePayment({payer:payer as Address,payee:payee as Address,token:token as Address,amount,expiry:Number(expiresAt),condition}));
@@ -114,9 +115,10 @@ export default function Home() {
     try {
       if (!result || !txHash) throw new Error("Fund the payment first.");
       const response=await fetch("/api/reclaim/request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context:result.proofContext,condition:result.request.condition})});
-      const body=await response.json() as {request?:string;sessionId?:string;error?:string};
-      if (!response.ok || !body.request || !body.sessionId) throw new Error(body.error || "Could not create Reclaim request.");
+      const body=await response.json() as {request?:string;sessionId?:string;statusToken?:string;error?:string};
+      if (!response.ok || !body.request || !body.sessionId || !body.statusToken) throw new Error(body.error || "Could not create Reclaim request.");
       setReclaimSessionId(body.sessionId);
+      setReclaimStatusToken(body.statusToken);
 
       const reclaim=await ReclaimProofRequest.fromJsonString(body.request);
       setProofStatus("Reclaim verification started. Complete the provider flow.");
@@ -127,7 +129,7 @@ export default function Home() {
 
       for (let attempt=0; attempt<60; attempt++) {
         await new Promise((resolve)=>setTimeout(resolve,2000));
-        const statusResponse=await fetch(`/api/reclaim/status?sessionId=${encodeURIComponent(body.sessionId)}`);
+        const statusResponse=await fetch(`/api/reclaim/status?sessionId=${encodeURIComponent(body.sessionId)}&statusToken=${encodeURIComponent(body.statusToken)}`);
         const status=await statusResponse.json() as {
           status?:string; proof?:unknown; verificationSignature?:Hex; error?:string
         };
