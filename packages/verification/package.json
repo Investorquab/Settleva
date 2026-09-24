@@ -1,7 +1,16 @@
 {
-  "name":"@settleva/verification",
-  "private":true,
-  "version":"0.1.0",
-  "type":"module","main":"dist/index.js","types":"dist/index.d.ts",
-  "scripts":{"check":"tsc --noEmit","test":"tsc","build":"tsc"}
+  "name": "@settleva/verification",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "tsc",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "postgres": "^3.4.7"
+  }
 }
