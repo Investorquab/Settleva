@@ -4,6 +4,12 @@ import { derivePaymentId } from "./payment-id.js";
 import { keccak256, stringToHex } from "viem";
 
 export interface CreatePaymentInput {
+  /**
+   * Human-readable token amount as a positive decimal string.
+   * The SDK commits this exact representation into paymentId.
+   * Callers submitting the on-chain transaction must convert it to
+   * the settlement token's atomic units (for Arc USDC, 6 decimals).
+   */
   readonly payer: `0x${string}`;
   readonly payee: `0x${string}`;
   readonly token: `0x${string}`;
