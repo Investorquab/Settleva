@@ -82,7 +82,7 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   assertVerifiedProofDataBinding(Boolean(matchingProof));
 
   const contextValue = matchingProof?.context?.contextMessage;
-  assertVerifiedContextBinding(contextValue,input.expectedPaymentId,input.expectedConditionHash);
+  assertVerifiedContextBinding(contextValue,input.expectedConditionHash);
 
   const claims = extractedParametersToClaims(matchingProof!.extractedParameters!);
 
