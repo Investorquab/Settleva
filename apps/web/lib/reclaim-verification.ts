@@ -4,6 +4,7 @@ import { buildVerificationAttestationHash } from "@settleva/sdk";
 import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
 import { findMatchingVerifiedProofData, PostgresReplayStore } from "@settleva/verification";
 import { keccak256, stringToHex, type Hex } from "viem";
+import { extractedParametersToClaims, parseProofContext, parseProofIdentifier } from "./reclaim-binding.js";
 import { privateKeyToAccount } from "viem/accounts";
 
 export interface ReclaimVerificationInput {
@@ -67,8 +68,8 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
 
   const proof = input.proofs[0] as Record<string, unknown>;
   const claimData = proof.claimData as Record<string, unknown> | undefined;
-  const proofIdentifier = claimData?.identifier;
-  if (typeof proofIdentifier !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(proofIdentifier)) throw new Error("Verified Reclaim proof has no valid claim identifier.");
+  const proofIdentifier = parseProofIdentifier(claimData?.identifier);
+  if (!proofIdentifier) throw new Error("Verified Reclaim proof has no valid claim identifier.");
 
   const data = Array.isArray(result.data) ? result.data : [];
   const matchingProof = findMatchingVerifiedProofData(data,{
@@ -83,7 +84,7 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const parsedContext = parseProofContext(contextValue);
   if (!parsedContext || parsedContext.paymentId !== input.expectedPaymentId || parsedContext.conditionHash !== input.expectedConditionHash) throw new Error("Verified proof context does not match the committed payment binding.");
 
-  const claims = Object.entries(matchingProof.extractedParameters!).map(([field,value]) => ({field,value:String(value)}));
+  const claims = extractedParametersToClaims(matchingProof.extractedParameters!);
 
   // The first production provider is intentionally schema-pinned: when the
   // committed condition is the GitHub deployment condition, require the
