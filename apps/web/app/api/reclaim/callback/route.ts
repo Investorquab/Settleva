@@ -66,7 +66,10 @@ export async function POST(request: Request) {
         if (!retryable) {
           await sessions.markFailed(sessionId,message);
         }
-        return NextResponse.json({received:true,verified:false,error:message},{status:400});
+        const status = retryable
+          ? (error instanceof ReclaimVerificationError && error.code === "REPLAY" ? 409 : 503)
+          : 400;
+        return NextResponse.json({received:true,verified:false,error:message},{status});
       }
     } finally {
       await sessions.close();
