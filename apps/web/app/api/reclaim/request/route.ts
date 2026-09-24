@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
+import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
 
 export const runtime = "nodejs";
 
@@ -58,8 +59,29 @@ export async function POST(request: Request) {
       return NextResponse.json({error:"Configured Reclaim provider version does not match the provider version resolved for this request."},{status:503});
     }
 
+    const callbackUrl = process.env.RECLAIM_CALLBACK_URL;
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!callbackUrl || !databaseUrl) {
+      return NextResponse.json({error:"Production Reclaim callback and replay database configuration are required."},{status:503});
+    }
+
+    requestConfig.setAppCallbackUrl(callbackUrl, true);
     requestConfig.setContext(context.paymentId, context.conditionHash);
     const sessionId = requestConfig.getSessionId();
+
+    const sessions = new ReclaimSessionStore(databaseUrl);
+    try {
+      await sessions.create({
+        sessionId,
+        paymentId:context.paymentId,
+        conditionHash:context.conditionHash,
+        condition,
+        providerId:resolvedProviderId,
+        providerVersion
+      });
+    } finally {
+      await sessions.close();
+    }
 
     return NextResponse.json({
       request:requestConfig.toJsonString(),
