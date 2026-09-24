@@ -37,17 +37,6 @@ export interface ReclaimVerificationResult {
   readonly verificationSignature: Hex;
 }
 
-function parseProofContext(value: string): {paymentId:string;conditionHash:Hex} | null {
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    if (typeof parsed.paymentId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(parsed.paymentId)) return null;
-    if (typeof parsed.conditionHash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(parsed.conditionHash)) return null;
-    return {paymentId:parsed.paymentId,conditionHash:parsed.conditionHash as Hex};
-  } catch {
-    return null;
-  }
-}
-
 export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): Promise<ReclaimVerificationResult> {
   if (input.proofs.length !== 1) throw new Error("Exactly one Reclaim proof is required for this payment condition.");
   if (hashCondition(input.condition) !== input.expectedConditionHash) throw new Error("Payment condition does not match the committed proof context.");
