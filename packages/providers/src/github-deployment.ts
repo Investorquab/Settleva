@@ -32,6 +32,28 @@ function assertDeploymentInput(input: GitHubDeploymentConditionInput): void {
   }
 }
 
+export interface GitHubDeploymentVerifiedClaims {
+  readonly repository: string;
+  readonly ref: string;
+  readonly sha: string;
+  readonly environment: string;
+  readonly status: string;
+}
+
+export function extractGitHubDeploymentClaims(
+  claims: readonly {field: string; value: string}[]
+): GitHubDeploymentVerifiedClaims | null {
+  const values = new Map(claims.map((claim) => [claim.field, claim.value]));
+  const repository = values.get(GITHUB_DEPLOYMENT_CLAIM_FIELDS.repository);
+  const ref = values.get(GITHUB_DEPLOYMENT_CLAIM_FIELDS.ref);
+  const sha = values.get(GITHUB_DEPLOYMENT_CLAIM_FIELDS.sha);
+  const environment = values.get(GITHUB_DEPLOYMENT_CLAIM_FIELDS.environment);
+  const status = values.get(GITHUB_DEPLOYMENT_CLAIM_FIELDS.status);
+  if (!repository || !ref || !sha || !environment || !status) return null;
+  if (!/^[^/]+\\/[^/]+$/.test(repository) || !/^[0-9a-fA-F]{40}$/.test(sha)) return null;
+  return {repository, ref, sha, environment, status};
+}
+
 export function buildGitHubDeploymentCondition(
   input: GitHubDeploymentConditionInput
 ): PaymentCondition {
