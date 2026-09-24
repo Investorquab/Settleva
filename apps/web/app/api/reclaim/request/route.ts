@@ -11,8 +11,13 @@ function isPaymentCondition(value: unknown): value is PaymentCondition {
   const condition = value as Record<string, unknown>;
   return condition.version === "1.0"
     && typeof condition.provider === "string"
+    && typeof condition.providerVersion === "string"
+    && condition.provider.trim().length > 0
+    && condition.providerVersion.trim().length > 0
     && Array.isArray(condition.claims)
+    && condition.claims.length > 0
     && Number.isSafeInteger(condition.expiresAt)
+    && condition.expiresAt > Math.floor(Date.now() / 1000)
     && condition.claims.every((claim) =>
       !!claim && typeof claim === "object"
       && typeof (claim as Record<string, unknown>).field === "string"
