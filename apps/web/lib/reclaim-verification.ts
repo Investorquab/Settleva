@@ -16,6 +16,16 @@ export interface ReclaimVerificationInput {
   readonly expectedProviderVersion: string;
 }
 
+export class ReclaimVerificationError extends Error {
+  readonly code: "INVALID" | "REPLAY" | "DATABASE";
+
+  constructor(code: "INVALID" | "REPLAY" | "DATABASE", message: string) {
+    super(message);
+    this.name = "ReclaimVerificationError";
+    this.code = code;
+  }
+}
+
 export interface ReclaimVerificationResult {
   readonly providerId: string;
   readonly providerVersion: string;
@@ -98,7 +108,7 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   });
 
   const replayStore = process.env.DATABASE_URL ? new PostgresReplayStore(process.env.DATABASE_URL) : null;
-  if (!replayStore) throw new Error("Replay protection database is not configured; no verification attestation will be issued.");
+  if (!replayStore) throw new ReclaimVerificationError("DATABASE","Replay protection database is not configured; no verification attestation will be issued.");
 
   let replayAccepted: boolean;
   try {
@@ -110,12 +120,12 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
         conditionHash:input.expectedConditionHash
       });
     } catch {
-      throw new Error("Replay protection database is unavailable; no verification attestation will be issued.");
+      throw new ReclaimVerificationError("DATABASE","Replay protection database is unavailable; no verification attestation will be issued.");
     }
   } finally {
     await replayStore.close();
   }
-  if (!replayAccepted) throw new Error("This Reclaim session or proof has already been accepted.");
+  if (!replayAccepted) throw new ReclaimVerificationError("REPLAY","This Reclaim session or proof has already been accepted.");
 
   return {
     providerId,
