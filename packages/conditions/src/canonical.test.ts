@@ -53,3 +53,25 @@ const justBeforeExpiry = evaluateClaims(condition, [
   {field:"repo.owner", value:"Investorquab"}
 ], condition.expiresAt - 1);
 if (!justBeforeExpiry.valid) throw new Error("condition should remain valid immediately before expiry");
+
+
+const duplicateCondition = {
+  ...condition,
+  claims: [...condition.claims, condition.claims[0]]
+};
+const duplicateConditionResult = evaluateClaims(duplicateCondition, [
+  {field:"repo.public", value:"true"},
+  {field:"repo.owner", value:"Investorquab"}
+]);
+if (duplicateConditionResult.valid || !duplicateConditionResult.failures.includes("DUPLICATE_CONDITION_CLAIM:repo.public")) {
+  throw new Error("duplicate condition claims must fail evaluation");
+}
+
+const duplicateVerifiedResult = evaluateClaims(condition, [
+  {field:"repo.public", value:"true"},
+  {field:"repo.public", value:"true"},
+  {field:"repo.owner", value:"Investorquab"}
+]);
+if (duplicateVerifiedResult.valid || !duplicateVerifiedResult.failures.includes("DUPLICATE_VERIFIED_CLAIM:repo.public")) {
+  throw new Error("duplicate verified claims must fail evaluation");
+}
