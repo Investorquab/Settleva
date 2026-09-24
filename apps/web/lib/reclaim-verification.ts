@@ -51,7 +51,7 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const {providerId,providerVersion} = requestConfig.getProviderVersion();
   if (providerId !== input.expectedProviderId || providerVersion !== input.expectedProviderVersion) throw new Error("Configured Reclaim provider version does not match the provider version resolved for this request.");
 
-  const result = await verifyProof(input.proofs,{providerId,providerVersion});
+  const result = await verifyProof(input.proofs as Parameters<typeof verifyProof>[0],{providerId,providerVersion});
   if (!result.isVerified) throw new Error(result.error?.message || "Reclaim rejected the proof.");
 
   const proof = input.proofs[0] as Record<string, unknown>;
