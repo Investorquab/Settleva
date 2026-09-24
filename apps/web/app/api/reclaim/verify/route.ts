@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { ReclaimProofRequest, verifyProof } from "@reclaimprotocol/js-sdk";
 import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/conditions";
 import { buildVerificationAttestationHash } from "@settleva/sdk";
-import { findMatchingVerifiedProofData } from "@settleva/verification";
+import { findMatchingVerifiedProofData, PostgresReplayStore } from "@settleva/verification";
 import { keccak256, stringToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 export const runtime = "nodejs";
+
+const replayStore = process.env.DATABASE_URL
+  ? new PostgresReplayStore(process.env.DATABASE_URL)
+  : null;
 
 function isPaymentCondition(value: unknown): value is PaymentCondition {
   if (!value || typeof value !== "object") return false;
@@ -92,6 +96,35 @@ export async function POST(request: Request) {
     const claims = Object.entries(extracted).map(([field,value]) => ({field,value:String(value)}));
     const evaluation = evaluateClaims(condition,claims);
     if (!evaluation.valid) return NextResponse.json({verified:false,error:"Condition failed.",failures:evaluation.failures,claims},{status:400});
+
+    if (!replayStore) {
+      return NextResponse.json({
+        verified:false,
+        error:"Replay protection database is not configured; no verification attestation will be issued."
+      },{status:503});
+    }
+
+    let replayAccepted: boolean;
+    try {
+      replayAccepted = await replayStore.claim({
+        sessionId: body.sessionId,
+        proofIdentifier,
+        paymentId: committed.paymentId,
+        conditionHash: committed.conditionHash
+      });
+    } catch {
+      return NextResponse.json({
+        verified:false,
+        error:"Replay protection database is unavailable; no verification attestation will be issued."
+      },{status:503});
+    }
+
+    if (!replayAccepted) {
+      return NextResponse.json({
+        verified:false,
+        error:"This Reclaim session or proof has already been accepted."
+      },{status:409});
+    }
 
     const account = privateKeyToAccount(verifierPrivateKey);
     const attestationHash = buildVerificationAttestationHash({
