@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ReclaimSessionStore } from "../../../../../lib/reclaim-session-store.js";
+import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
 
 export const runtime = "nodejs";
 
