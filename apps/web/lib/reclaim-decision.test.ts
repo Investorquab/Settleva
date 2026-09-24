@@ -10,6 +10,7 @@ import {
   assertSingleProof,
   assertVerifiedContextBinding,
   assertVerifiedProofDataBinding,
+  resolveCallbackFailure,
   resolveVerificationCommit,
   shouldMarkCallbackFailed
 } from "./reclaim-decision.ts";
@@ -93,4 +94,13 @@ test("retryable verification failures never mark a pending callback failed", () 
   assert.equal(shouldMarkCallbackFailed(false, "pending"), true);
   assert.equal(shouldMarkCallbackFailed(false, "verified"), false);
   assert.equal(shouldMarkCallbackFailed(false, "failed"), false);
+});
+
+test("callback failure resolution never overwrites a verified session", () => {
+  assert.equal(resolveCallbackFailure(false, "verified"), "already-verified");
+  assert.equal(resolveCallbackFailure(true, "verified"), "already-verified");
+  assert.equal(resolveCallbackFailure(true, "pending"), "retry");
+  assert.equal(resolveCallbackFailure(false, "pending"), "mark-failed");
+  assert.equal(resolveCallbackFailure(false, "failed"), "retry");
+  assert.equal(resolveCallbackFailure(false, null), "retry");
 });
