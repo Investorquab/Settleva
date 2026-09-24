@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { ReclaimProofRequest, verifyProof } from "@reclaimprotocol/js-sdk";
 import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/conditions";
 import { buildVerificationAttestationHash } from "@settleva/sdk";
+import { findMatchingVerifiedProofData } from "@settleva/verification";
 import { keccak256, stringToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { findMatchingVerifiedProofData } from "../verified-data.js";
 
 export const runtime = "nodejs";
 
