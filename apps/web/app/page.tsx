@@ -117,17 +117,32 @@ export default function Home() {
       const body=await response.json() as {request?:string;sessionId?:string;error?:string};
       if (!response.ok || !body.request || !body.sessionId) throw new Error(body.error || "Could not create Reclaim request.");
       setReclaimSessionId(body.sessionId);
+
       const reclaim=await ReclaimProofRequest.fromJsonString(body.request);
       setProofStatus("Reclaim verification started. Complete the provider flow.");
       await reclaim.startSession({
-        onSuccess:(proofs)=>{
-          const list=Array.isArray(proofs)?proofs:[proofs];
-          setProof(list as unknown[]);
-          setProofStatus("Proof received. Verify it before settlement.");
-        },
+        onSuccess:()=>setProofStatus("Proof delivered to Settleva backend. Waiting for server verification…"),
         onError:(err)=>setProofStatus(`Reclaim error: ${err.message}`)
       });
-    } catch(e){setProofStatus("");setError(e instanceof Error?e.message:"Could not start Reclaim.");}
+
+      for (let attempt=0; attempt<60; attempt++) {
+        await new Promise((resolve)=>setTimeout(resolve,2000));
+        const statusResponse=await fetch(`/api/reclaim/status?sessionId=${encodeURIComponent(body.sessionId)}`);
+        const status=await statusResponse.json() as {
+          status?:string; proof?:unknown; verificationSignature?:Hex; error?:string
+        };
+        if (status.status === "verified" && status.proof && status.verificationSignature) {
+          setProof(Array.isArray(status.proof) ? status.proof : [status.proof]);
+          setVerificationSignature(status.verificationSignature);
+          setProofVerified(true);
+          setProofStatus("Backend callback verified the Reclaim proof.");
+          return;
+        }
+        if (status.status === "failed") throw new Error(status.error || "Backend Reclaim verification failed.");
+      }
+
+      throw new Error("Timed out waiting for the Reclaim backend callback.");
+    } catch(e){setProofStatus("");setError(e instanceof Error?e.message:"Could not complete Reclaim.");}
   }
 
   async function verifyProofServerSide() {
