@@ -2,8 +2,12 @@ import { keccak256, stringToHex } from "viem";
 import type { ConditionClaim, PaymentCondition } from "./types.js";
 
 function compareClaims(a: ConditionClaim, b: ConditionClaim): number {
-  return [a.field, a.operator, a.value].join("\u0000")
-    .localeCompare([b.field, b.operator, b.value].join("\u0000"));
+  const left = [a.field, a.operator, a.value].join("\u0000");
+  const right = [b.field, b.operator, b.value].join("\u0000");
+  // Canonicalization must be runtime-independent. localeCompare() can vary
+  // with locale/runtime configuration, so use deterministic UTF-16 code-unit
+  // ordering instead.
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 export function canonicalizeCondition(condition: PaymentCondition): string {
