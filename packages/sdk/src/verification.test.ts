@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
-import { keccak256, stringToHex } from "viem";
+import { keccak256, stringToHex, recoverMessageAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { buildVerificationAttestationHash } from "./verification.js";
 
 const base = {
@@ -17,3 +18,8 @@ for (const field of Object.keys(base) as Array<keyof typeof base>) {
   const mutated = {...base, [field]: keccak256(stringToHex(`mutated-${field}`))};
   assert.notEqual(buildVerificationAttestationHash(mutated), first, `attestation must bind ${field}`);
 }
+
+const signer = privateKeyToAccount("0x0123456789012345678901234567890123456789012345678901234567890123");
+const signature = await signer.signMessage({message:{raw:first}});
+const recovered = await recoverMessageAddress({message:{raw:first}, signature});
+assert.equal(recovered, signer.address, "attestation signature must recover against the Solidity message-prefix scheme");
