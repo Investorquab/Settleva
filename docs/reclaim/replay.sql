@@ -9,8 +9,16 @@ create table if not exists settleva_reclaim_replay (
   primary key (identifier_type, identifier)
 );
 
-create unique index if not exists settleva_reclaim_replay_session_idx
-  on settleva_reclaim_replay (session_id);
+-- Session and proof bindings are separate rows. The uniqueness constraints
+-- therefore apply only to their respective identifier types; a proof row must
+-- be allowed to carry the same session_id as its owning session row.
+drop index if exists settleva_reclaim_replay_session_idx;
+drop index if exists settleva_reclaim_replay_proof_idx;
 
-create unique index if not exists settleva_reclaim_replay_proof_idx
-  on settleva_reclaim_replay (proof_identifier);
+create unique index settleva_reclaim_replay_session_idx
+  on settleva_reclaim_replay (session_id)
+  where identifier_type = 'session';
+
+create unique index settleva_reclaim_replay_proof_idx
+  on settleva_reclaim_replay (proof_identifier)
+  where identifier_type = 'proof';
