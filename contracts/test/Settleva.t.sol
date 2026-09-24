@@ -47,7 +47,7 @@ contract SettlevaTest is Test {
     }
 
     function _context(bytes32 id, bytes32 hash) internal pure returns (string memory) {
-        return string.concat('{"contextAddress":"', vm.toString(id), '","contextMessage":"', vm.toString(hash), '"}');
+        return string.concat('{"contextAddress":"', vm.toString(id), '","contextMessage":"', vm.toString(hash), '","reclaimSessionId":"session-1"}');
     }
 
     function _proof() internal view returns (IReclaimVerifier.Proof memory proof) {
@@ -141,13 +141,41 @@ contract SettlevaTest is Test {
         assertFalse(verifier.verified());
     }
 
-    function testContextMustMatchExactCommittedJson() public {
+    function testContextBindsCommittedFieldsWithAdditionalReclaimMetadata() public {
         _create();
         IReclaimVerifier.Proof memory proof = _proof();
         proof.claimInfo.context = string.concat(
-            '{"paymentId":"', vm.toString(paymentId),
-            '","conditionHash":"', vm.toString(conditionHash),
-            '","extra":"not-committed"}'
+            '{"contextAddress":"', vm.toString(paymentId),
+            '","contextMessage":"', vm.toString(conditionHash),
+            '","reclaimSessionId":"session-1","extractedParameters":{"status":"success"}}'
+        );
+        vm.prank(payee);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertTrue(verifier.verified());
+    }
+
+    function testDuplicateContextAddressKeyReverts() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        proof.claimInfo.context = string.concat(
+            '{"contextAddress":"', vm.toString(paymentId),
+            '","contextAddress":"0x', vm.toString(uint160(address(0x99))),
+            '","contextMessage":"', vm.toString(conditionHash), '"}'
+        );
+        vm.prank(payee);
+        vm.expectRevert(Settleva.ConditionMismatch.selector);
+        settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertFalse(verifier.verified());
+    }
+
+    function testDuplicateContextMessageKeyReverts() public {
+        _create();
+        IReclaimVerifier.Proof memory proof = _proof();
+        proof.claimInfo.context = string.concat(
+            '{"contextAddress":"', vm.toString(paymentId),
+            '","contextMessage":"', vm.toString(conditionHash),
+            '","contextMessage":"0x', vm.toString(bytes32(uint256(0x99))),
+            '"}'
         );
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
