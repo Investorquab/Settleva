@@ -76,6 +76,18 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const evaluation = evaluateClaims(input.condition,claims);
   if (!evaluation.valid) throw new Error(`Condition failed: ${evaluation.failures.join(", ")}`);
 
+  // Sign before claiming replay state so a signing failure cannot consume the
+  // session/proof binding and leave a valid callback permanently unrecoverable.
+  const account = privateKeyToAccount(verifierPrivateKey);
+  const verificationSignature = await account.signMessage({
+    message:{raw:buildVerificationAttestationHash({
+      paymentId:input.expectedPaymentId as Hex,
+      conditionHash:input.expectedConditionHash,
+      providerHash:keccak256(stringToHex(providerId)),
+      proofIdentifier:proofIdentifier as Hex
+    })}
+  });
+
   const replayStore = process.env.DATABASE_URL ? new PostgresReplayStore(process.env.DATABASE_URL) : null;
   if (!replayStore) throw new Error("Replay protection database is not configured; no verification attestation will be issued.");
 
@@ -95,16 +107,6 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
     await replayStore.close();
   }
   if (!replayAccepted) throw new Error("This Reclaim session or proof has already been accepted.");
-
-  const account = privateKeyToAccount(verifierPrivateKey);
-  const verificationSignature = await account.signMessage({
-    message:{raw:buildVerificationAttestationHash({
-      paymentId:input.expectedPaymentId as Hex,
-      conditionHash:input.expectedConditionHash,
-      providerHash:keccak256(stringToHex(providerId)),
-      proofIdentifier:proofIdentifier as Hex
-    })}
-  });
 
   return {
     providerId,
