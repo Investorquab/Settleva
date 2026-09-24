@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       const session = await sessions.get(sessionId);
       if (!session) return NextResponse.json({error:"Unknown Reclaim session."},{status:404});
       if (session.status === "verified") return NextResponse.json({received:true,verified:true,sessionId});
+      if (session.status === "failed") return NextResponse.json({received:true,verified:false,sessionId,error:session.error || "Reclaim session has already failed."},{status:400});
 
       try {
         const result = await verifyReclaimAndAttest({
