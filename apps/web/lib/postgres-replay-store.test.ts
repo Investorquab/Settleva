@@ -39,16 +39,23 @@ test("persistent replay store accepts only one concurrent identical claim", {ski
     // than serializing all contenders through one client connection.
     const stores = Array.from({length: 16}, () => new PostgresReplayStore(databaseUrl!));
     const results = await Promise.all(stores.map((candidate) => candidate.claim(binding)));
-    assert.equal(results.filter(Boolean).length, 1);
+    assert.equal(results.every(Boolean), true);
 
     const replayStore = new PostgresReplayStore(databaseUrl!);
     try {
+      // Exact retries are intentionally idempotent so a crash after replay
+      // acceptance but before session persistence can recover safely.
+      assert.equal(await replayStore.claim(binding), true);
       assert.equal(
         await replayStore.claim({...binding, proofIdentifier: `${suffix}-other-proof`}),
         false
       );
       assert.equal(
         await replayStore.claim({...binding, sessionId: `${suffix}-other-session`}),
+        false
+      );
+      assert.equal(
+        await replayStore.claim({...binding, paymentId: `${suffix}-other-payment`}),
         false
       );
     } finally {
