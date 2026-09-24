@@ -21,3 +21,5 @@ export interface ProofProvider {
     expectedConditionHash:`0x${string}`
   ):Promise<VerificationResult>;
 }
+
+export * from "./replay-store.js";
