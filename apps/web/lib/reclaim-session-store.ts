@@ -59,7 +59,7 @@ export class ReclaimSessionStore {
     };
   }
 
-  async markVerified(sessionId: string, proof: unknown, proofIdentifier: string, verificationSignature: string): Promise<void> {
+  async markVerified(sessionId: string, proof: unknown, proofIdentifier: string, verificationSignature: string): Promise<boolean> {
     await this.sql`
       update settleva_reclaim_sessions
       set status = 'verified',
@@ -69,15 +69,19 @@ export class ReclaimSessionStore {
           error = null,
           updated_at = now()
       where session_id = ${sessionId}
+        and status = 'pending'
     `;
+    return result.count === 1;
   }
 
-  async markFailed(sessionId: string, error: string): Promise<void> {
+  async markFailed(sessionId: string, error: string): Promise<boolean> {
     await this.sql`
       update settleva_reclaim_sessions
       set status = 'failed', error = ${error}, updated_at = now()
       where session_id = ${sessionId}
+        and status = 'pending'
     `;
+    return result.count === 1;
   }
 
   async close(): Promise<void> {
