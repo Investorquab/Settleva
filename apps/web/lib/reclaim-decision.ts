@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 import type { PaymentCondition } from "@settleva/conditions";
-import { parseProofContext, parseProofIdentifier, type ParsedProofContext } from "./reclaim-binding.ts";
+import { parseProofIdentifier } from "./reclaim-binding.ts";
 
 export type VerificationCommitStatus = "committed" | "already-committed" | "conflict";
 
@@ -34,13 +34,11 @@ export function assertProofIdentifier(value: unknown): string {
   return identifier;
 }
 
-export function assertVerifiedContextBinding(value: unknown, expectedPaymentId: string, expectedConditionHash: Hex): ParsedProofContext {
+export function assertVerifiedContextBinding(value: unknown, expectedConditionHash: Hex): void {
   if (typeof value !== "string") throw new Error("Verified proof context message is missing.");
-  const parsed = parseProofContext(value);
-  if (!parsed || parsed.paymentId !== expectedPaymentId || parsed.conditionHash !== expectedConditionHash) {
-    throw new Error("Verified proof context does not match the committed payment binding.");
+  if (value !== expectedConditionHash) {
+    throw new Error("Verified proof context message does not match the committed condition binding.");
   }
-  return parsed;
 }
 
 export function assertVerifiedProofDataBinding(found: boolean): void {
