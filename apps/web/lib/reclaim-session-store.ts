@@ -8,6 +8,7 @@ export interface ReclaimSessionRecord {
   readonly condition: PaymentCondition;
   readonly providerId: string;
   readonly providerVersion: string;
+  readonly statusTokenHash: string;
   readonly status: "pending" | "verified" | "failed";
   readonly proof?: unknown;
   readonly proofIdentifier?: string;
@@ -25,9 +26,9 @@ export class ReclaimSessionStore {
   async create(record: Omit<ReclaimSessionRecord, "status">): Promise<void> {
     await this.sql`
       insert into settleva_reclaim_sessions
-        (session_id, payment_id, condition_hash, condition, provider_id, provider_version, status)
+        (session_id, payment_id, condition_hash, condition, provider_id, provider_version, status_token_hash, status)
       values
-        (${record.sessionId}, ${record.paymentId}, ${record.conditionHash}, ${JSON.stringify(record.condition)}, ${record.providerId}, ${record.providerVersion}, 'pending')
+        (${record.sessionId}, ${record.paymentId}, ${record.conditionHash}, ${JSON.stringify(record.condition)}, ${record.providerId}, ${record.providerVersion}, ${record.statusTokenHash}, 'pending')
       on conflict (session_id) do nothing
     `;
   }
@@ -35,7 +36,7 @@ export class ReclaimSessionStore {
   async get(sessionId: string): Promise<ReclaimSessionRecord | null> {
     const rows = await this.sql`
       select session_id, payment_id, condition_hash, condition, provider_id, provider_version,
-             status, proof, proof_identifier, verification_signature, error
+             status_token_hash, status, proof, proof_identifier, verification_signature, error
       from settleva_reclaim_sessions
       where session_id = ${sessionId}
       limit 1
@@ -49,6 +50,7 @@ export class ReclaimSessionStore {
       condition: row.condition,
       providerId: row.provider_id,
       providerVersion: row.provider_version,
+      statusTokenHash: row.status_token_hash,
       status: row.status,
       proof: row.proof ?? undefined,
       proofIdentifier: row.proof_identifier ?? undefined,
