@@ -80,6 +80,7 @@ contract SettlevaTest is Test {
         _create();
         vm.expectRevert(Settleva.NotPayee.selector);
         settleva.release(paymentId, _proof(), _signature(_proof(), verificationSignerPk));
+        assertFalse(verifier.verified());
     }
 
     function testReleaseRequiresVerificationAttestation() public {
@@ -127,6 +128,7 @@ contract SettlevaTest is Test {
         vm.prank(payee);
         vm.expectRevert(Settleva.ProviderMismatch.selector);
         settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertFalse(verifier.verified());
     }
 
     function testWrongConditionRevertsBeforeVerifierCall() public {
@@ -146,6 +148,7 @@ contract SettlevaTest is Test {
         vm.prank(payee);
         vm.expectRevert(Settleva.ConditionMismatch.selector);
         settleva.release(paymentId, proof, _signature(proof, verificationSignerPk));
+        assertFalse(verifier.verified());
     }
 
     function testReleaseAfterExpiryRevertsBeforeVerifierCall() public {
