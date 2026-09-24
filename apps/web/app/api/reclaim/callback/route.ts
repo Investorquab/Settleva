@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
 import { ReclaimVerificationError, verifyReclaimAndAttest } from "../../../../lib/reclaim-verification.js";
-import { resolveVerificationCommit, shouldMarkCallbackFailed } from "../../../../lib/reclaim-decision.js";
+import { resolveCallbackFailure, resolveVerificationCommit } from "../../../../lib/reclaim-decision.js";
 
 export const runtime = "nodejs";
 
@@ -49,7 +49,16 @@ export async function POST(request: Request) {
           expectedProviderVersion:session.providerVersion
         });
 
-        const transitioned = await sessions.markVerified(sessionId,result.proof,result.proofIdentifier,result.verificationSignature);
+        let transitioned: boolean;
+        try {
+          transitioned = await sessions.markVerified(sessionId,result.proof,result.proofIdentifier,result.verificationSignature);
+        } catch (error) {
+          const currentStatus = (await sessions.get(sessionId))?.status ?? null;
+          if (currentStatus === "verified") {
+            return NextResponse.json({received:true,verified:true,sessionId});
+          }
+          throw error;
+        }
         const commitStatus = resolveVerificationCommit(transitioned, transitioned ? "verified" : (await sessions.get(sessionId))?.status ?? null);
         if (commitStatus === "already-committed") {
           return NextResponse.json({received:true,verified:true,sessionId});
@@ -65,12 +74,23 @@ export async function POST(request: Request) {
         const message = error instanceof Error ? error.message : "Reclaim verification failed.";
         const retryable = error instanceof ReclaimVerificationError && (error.code === "DATABASE" || error.code === "REPLAY");
         const currentStatus = (await sessions.get(sessionId))?.status ?? null;
-        if (shouldMarkCallbackFailed(retryable, currentStatus)) {
-          await sessions.markFailed(sessionId,message);
+        const failureStatus = resolveCallbackFailure(retryable, currentStatus);
+        if (failureStatus === "already-verified") {
+          return NextResponse.json({received:true,verified:true,sessionId});
+        }
+        if (failureStatus === "mark-failed") {
+          try {
+            await sessions.markFailed(sessionId,message);
+          } catch {
+            return NextResponse.json(
+              {received:true,verified:false,error:"Could not persist Reclaim callback failure; retry the callback."},
+              {status:503}
+            );
+          }
         }
         const status = retryable
           ? (error instanceof ReclaimVerificationError && error.code === "REPLAY" ? 409 : 503)
-          : 400;
+          : failureStatus === "retry" ? 503 : 400;
         return NextResponse.json({received:true,verified:false,error:message},{status});
       }
     } finally {
