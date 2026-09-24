@@ -10,34 +10,49 @@ export class PostgresReplayStore implements ReplayStore {
 
   async claim(binding: ReplayBinding): Promise<boolean> {
     return this.sql.begin(async (sql) => {
-      const session = await sql`
+      const existing = await sql`
+        select identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash
+        from settleva_reclaim_replay
+        where (identifier_type = 'session' and identifier = ${binding.sessionId})
+           or (identifier_type = 'proof' and identifier = ${binding.proofIdentifier})
+        for update
+      `;
+
+      for (const row of existing) {
+        if (
+          row.session_id !== binding.sessionId ||
+          row.proof_identifier !== binding.proofIdentifier ||
+          row.payment_id !== binding.paymentId ||
+          row.condition_hash !== binding.conditionHash
+        ) {
+          return false;
+        }
+      }
+
+      await sql`
         insert into settleva_reclaim_replay
           (identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash)
         values
           ('session', ${binding.sessionId}, ${binding.sessionId}, ${binding.proofIdentifier}, ${binding.paymentId}, ${binding.conditionHash})
         on conflict do nothing
-        returning identifier
       `;
 
-      if (session.length === 0) return false;
-
-      const proof = await sql`
+      await sql`
         insert into settleva_reclaim_replay
           (identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash)
         values
           ('proof', ${binding.proofIdentifier}, ${binding.sessionId}, ${binding.proofIdentifier}, ${binding.paymentId}, ${binding.conditionHash})
         on conflict do nothing
-        returning identifier
       `;
 
-      if (proof.length === 0) {
-        throw new ReplayConflictError();
-      }
+      const accepted = await sql`
+        select count(*)::int as count
+        from settleva_reclaim_replay
+        where (identifier_type = 'session' and identifier = ${binding.sessionId})
+           or (identifier_type = 'proof' and identifier = ${binding.proofIdentifier})
+      `;
 
-      return true;
-    }).catch((error) => {
-      if (error instanceof ReplayConflictError) return false;
-      throw error;
+      return Number(accepted[0]?.count) === 2;
     });
   }
 
@@ -45,4 +60,3 @@ export class PostgresReplayStore implements ReplayStore {
     await this.sql.end({ timeout: 5 });
   }
 }
-
