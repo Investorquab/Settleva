@@ -54,10 +54,9 @@ const justBeforeExpiry = evaluateClaims(condition, [
 ], condition.expiresAt - 1);
 if (!justBeforeExpiry.valid) throw new Error("condition should remain valid immediately before expiry");
 
-
 const duplicateCondition = {
   ...condition,
-  claims: [...condition.claims, condition.claims[0]]
+  claims: [...condition.claims, condition.claims[0]!]
 };
 const duplicateConditionResult = evaluateClaims(duplicateCondition, [
   {field:"repo.public", value:"true"},
