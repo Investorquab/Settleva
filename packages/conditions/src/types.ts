@@ -30,6 +30,16 @@ export function evaluateClaims(
   now = Math.floor(Date.now() / 1000)
 ): ConditionEvaluation {
   const failures: string[] = [];
+  const expectedFields = new Set<string>();
+  for (const expected of condition.claims) {
+    if (expectedFields.has(expected.field)) failures.push(`DUPLICATE_CONDITION_CLAIM:${expected.field}`);
+    expectedFields.add(expected.field);
+  }
+  const verifiedFields = new Set<string>();
+  for (const claim of claims) {
+    if (verifiedFields.has(claim.field)) failures.push(`DUPLICATE_VERIFIED_CLAIM:${claim.field}`);
+    verifiedFields.add(claim.field);
+  }
   if (!Number.isSafeInteger(now) || now >= condition.expiresAt) {
     failures.push("CONDITION_EXPIRED");
   }
