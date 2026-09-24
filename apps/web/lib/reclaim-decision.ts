@@ -2,6 +2,8 @@ import type { Hex } from "viem";
 import type { PaymentCondition } from "@settleva/conditions";
 import { parseProofContext, parseProofIdentifier, type ParsedProofContext } from "./reclaim-binding.ts";
 
+export type VerificationCommitStatus = "committed" | "already-committed" | "conflict";
+
 export function assertSingleProof(proofs: readonly unknown[]): unknown {
   if (proofs.length !== 1) throw new Error("Exactly one Reclaim proof is required for this payment condition.");
   return proofs[0];
@@ -51,4 +53,20 @@ export function assertGitHubDeploymentEvidence(isGitHubDeployment: boolean, hasC
 
 export function assertConditionEvaluation(valid: boolean, failures: readonly string[]): void {
   if (!valid) throw new Error(`Condition failed: ${failures.join(", ")}`);
+}
+
+export function resolveVerificationCommit(
+  transitioned: boolean,
+  currentStatus: "pending" | "verified" | "failed" | null
+): VerificationCommitStatus {
+  if (transitioned) return "committed";
+  if (currentStatus === "verified") return "already-committed";
+  return "conflict";
+}
+
+export function shouldMarkCallbackFailed(
+  retryable: boolean,
+  currentStatus: "pending" | "verified" | "failed" | null
+): boolean {
+  return !retryable && currentStatus === "pending";
 }
