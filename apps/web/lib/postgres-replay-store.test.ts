@@ -32,19 +32,28 @@ test("persistent replay store accepts only one concurrent identical claim", {ski
 
   const store = new PostgresReplayStore(databaseUrl!);
   try {
-    const results = await Promise.all(
-      Array.from({length: 32}, () => store.claim(binding))
-    );
+    // Use one store per simulated request. Each instance has its own
+    // connection, so this exercises the database uniqueness boundaries rather
+    // than serializing all contenders through one client connection.
+    const stores = Array.from({length: 16}, () => new PostgresReplayStore(databaseUrl!));
+    const results = await Promise.all(stores.map((candidate) => candidate.claim(binding)));
     assert.equal(results.filter(Boolean).length, 1);
 
-    assert.equal(
-      await store.claim({...binding, proofIdentifier: `${suffix}-other-proof`}),
-      false
-    );
-    assert.equal(
-      await store.claim({...binding, sessionId: `${suffix}-other-session`}),
-      false
-    );
+    const replayStore = new PostgresReplayStore(databaseUrl!);
+    try {
+      assert.equal(
+        await replayStore.claim({...binding, proofIdentifier: `${suffix}-other-proof`}),
+        false
+      );
+      assert.equal(
+        await replayStore.claim({...binding, sessionId: `${suffix}-other-session`}),
+        false
+      );
+    } finally {
+      await replayStore.close();
+    }
+
+    await Promise.all(stores.map((candidate) => candidate.close()));
   } finally {
     await store.close();
     await sql`
