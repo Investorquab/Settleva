@@ -5,6 +5,6 @@
   "type":"module",
   "main":"dist/index.js",
   "types":"dist/index.d.ts",
-  "scripts":{"check":"tsc --noEmit --rootDir ../..","test":"tsc --noEmit --rootDir ../..","build":"tsc"},
+  "scripts":{"check":"tsc --noEmit --rootDir ../..","test":"tsc --noEmit --rootDir ../..","build":"tsc -p tsconfig.build.json"},
   "dependencies":{"@settleva/conditions":"workspace:*","@settleva/verification":"workspace:*"}
 }
