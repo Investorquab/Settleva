@@ -5,6 +5,7 @@ create table if not exists settleva_reclaim_sessions (
   condition jsonb not null,
   provider_id text not null,
   provider_version text not null,
+  status_token_hash text,
   status text not null check (status in ('pending', 'verified', 'failed')),
   proof jsonb,
   proof_identifier text,
