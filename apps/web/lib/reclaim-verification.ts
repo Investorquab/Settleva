@@ -81,14 +81,18 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
 
   let replayAccepted: boolean;
   try {
-    replayAccepted = await replayStore.claim({
-      sessionId:input.sessionId,
-      proofIdentifier,
-      paymentId:input.expectedPaymentId,
-      conditionHash:input.expectedConditionHash
-    });
-  } catch {
-    throw new Error("Replay protection database is unavailable; no verification attestation will be issued.");
+    try {
+      replayAccepted = await replayStore.claim({
+        sessionId:input.sessionId,
+        proofIdentifier,
+        paymentId:input.expectedPaymentId,
+        conditionHash:input.expectedConditionHash
+      });
+    } catch {
+      throw new Error("Replay protection database is unavailable; no verification attestation will be issued.");
+    }
+  } finally {
+    await replayStore.close();
   }
   if (!replayAccepted) throw new Error("This Reclaim session or proof has already been accepted.");
 
