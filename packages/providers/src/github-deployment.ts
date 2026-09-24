@@ -54,6 +54,12 @@ export function extractGitHubDeploymentClaims(
   return {repository, ref, sha, environment, status};
 }
 
+export function isGitHubDeploymentCondition(condition: PaymentCondition): boolean {
+  const fields = condition.claims.map((claim) => claim.field).sort();
+  const expected = Object.values(GITHUB_DEPLOYMENT_CLAIM_FIELDS).sort();
+  return fields.length === expected.length && fields.every((field, index) => field === expected[index]);
+}
+
 export function buildGitHubDeploymentCondition(
   input: GitHubDeploymentConditionInput
 ): PaymentCondition {
