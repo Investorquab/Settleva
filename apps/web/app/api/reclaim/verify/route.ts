@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
-import { verifyReclaimAndAttest } from "../../../../lib/reclaim-verification.js";
+import { verifyReclaimAndAttest } from "../../../lib/reclaim-verification.js";
 
 export const runtime = "nodejs";
 
