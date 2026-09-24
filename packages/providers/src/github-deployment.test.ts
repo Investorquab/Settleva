@@ -48,3 +48,29 @@ test("GitHub deployment condition cannot silently omit a committed field", () =>
     true
   );
 });
+
+test("GitHub deployment condition rejects malformed deployment identity", () => {
+  assert.throws(() => buildGitHubDeploymentCondition({
+    provider: "reclaim-provider-id",
+    providerVersion: "1.0.0",
+    repository: "Investorquab/Settleva",
+    ref: "main",
+    sha: "not-a-sha",
+    environment: "production",
+    status: "success",
+    expiresAt: 1_900_000_000
+  }), /40-character hexadecimal/);
+});
+
+test("GitHub deployment condition rejects expired commitments", () => {
+  assert.throws(() => buildGitHubDeploymentCondition({
+    provider: "reclaim-provider-id",
+    providerVersion: "1.0.0",
+    repository: "Investorquab/Settleva",
+    ref: "main",
+    sha: "0123456789abcdef0123456789abcdef01234567",
+    environment: "production",
+    status: "success",
+    expiresAt: 1
+  }), /future Unix timestamp/);
+});
