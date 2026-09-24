@@ -23,7 +23,7 @@ export class ReclaimSessionStore {
     this.sql = postgres(connectionString, { max: 1 });
   }
 
-  async create(record: Omit<ReclaimSessionRecord, "status">): Promise<void> {
+  async create(record: Omit<ReclaimSessionRecord, "status">): Promise<boolean> {
     await this.sql`
       insert into settleva_reclaim_sessions
         (session_id, payment_id, condition_hash, condition, provider_id, provider_version, status_token_hash, status)
@@ -31,6 +31,7 @@ export class ReclaimSessionStore {
         (${record.sessionId}, ${record.paymentId}, ${record.conditionHash}, ${JSON.stringify(record.condition)}, ${record.providerId}, ${record.providerVersion}, ${record.statusTokenHash}, 'pending')
       on conflict (session_id) do nothing
     `;
+    return result.count === 1;
   }
 
   async get(sessionId: string): Promise<ReclaimSessionRecord | null> {
