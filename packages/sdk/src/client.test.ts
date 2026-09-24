@@ -22,3 +22,13 @@ if (prepared.conditionHash.length !== 66) throw new Error("condition hash failed
 const proofContext = JSON.parse(prepared.proofContext) as Record<string, string>;
 if (proofContext.paymentId !== prepared.paymentId) throw new Error("proof context payment binding failed");
 if (proofContext.conditionHash !== prepared.conditionHash) throw new Error("proof context condition binding failed");
+
+const reordered = prepareCreatePayment({
+  ...base,
+  condition:{
+    ...base.condition,
+    claims:[...base.condition.claims].reverse()
+  }
+});
+if (reordered.paymentId !== prepared.paymentId) throw new Error("payment id canonicalization failed");
+if (reordered.conditionHash !== prepared.conditionHash) throw new Error("condition hash canonicalization mismatch");
