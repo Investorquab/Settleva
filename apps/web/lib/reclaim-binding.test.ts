@@ -4,7 +4,7 @@ import {
   extractedParametersToClaims,
   parseProofContext,
   parseProofIdentifier
-} from "./reclaim-binding";
+} from "./reclaim-binding.ts";
 
 test("parseProofContext accepts the exact payment and condition binding", () => {
   const context = JSON.stringify({
