@@ -54,14 +54,15 @@ test("proof identifier validation fails closed", () => {
   assert.throws(() => assertProofIdentifier(undefined), /identifier/);
 });
 
-test("verified context must bind payment and condition together", () => {
-  const context = JSON.stringify({paymentId, conditionHash});
-  assert.deepEqual(assertVerifiedContextBinding(context, paymentId, conditionHash), {paymentId, conditionHash});
+test("verified context message must equal the committed condition hash", () => {
+  assert.doesNotThrow(() => assertVerifiedContextBinding(conditionHash, conditionHash));
   assert.throws(
-    () => assertVerifiedContextBinding(JSON.stringify({paymentId, conditionHash:"0x3333333333333333333333333333333333333333333333333333333333333333"}), paymentId, conditionHash),
-    /payment binding/
+    () => assertVerifiedContextBinding("0x3333333333333333333333333333333333333333333333333333333333333333", conditionHash),
+    /condition binding/
   );
-  assert.throws(() => assertVerifiedContextBinding(undefined, paymentId, conditionHash), /context message/);
+  assert.throws(() => assertVerifiedContextBinding(undefined, conditionHash), /context message/);
+});
+
 });
 
 test("verified proof data must be present on the same entry", () => {
