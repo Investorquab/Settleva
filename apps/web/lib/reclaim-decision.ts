@@ -64,9 +64,20 @@ export function resolveVerificationCommit(
   return "conflict";
 }
 
+export type CallbackFailureStatus = "mark-failed" | "already-verified" | "retry";
+
+export function resolveCallbackFailure(
+  retryable: boolean,
+  currentStatus: "pending" | "verified" | "failed" | null
+): CallbackFailureStatus {
+  if (currentStatus === "verified") return "already-verified";
+  if (retryable || currentStatus !== "pending") return "retry";
+  return "mark-failed";
+}
+
 export function shouldMarkCallbackFailed(
   retryable: boolean,
   currentStatus: "pending" | "verified" | "failed" | null
 ): boolean {
-  return !retryable && currentStatus === "pending";
+  return resolveCallbackFailure(retryable, currentStatus) === "mark-failed";
 }
