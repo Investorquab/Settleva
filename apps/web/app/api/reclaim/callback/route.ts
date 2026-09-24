@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
-import { verifyReclaimAndAttest } from "../../../../lib/reclaim-verification.js";
+import { ReclaimSessionStore } from "../../../lib/reclaim-session-store.js";
+import { verifyReclaimAndAttest } from "../../../lib/reclaim-verification.js";
 
 export const runtime = "nodejs";
 
