@@ -21,7 +21,7 @@ A verification request may proceed only when the persistence layer atomically ac
 1. the initiated Reclaim session for the same payment and condition; and
 2. the proof identifier for the same payment and condition.
 
-A previously accepted session or proof identifier must fail closed.
+A previously accepted identifier must fail closed when it is presented with a different payment, condition, session, or proof binding. An exact previously accepted binding is idempotently recoverable so a crash between replay acceptance and session persistence cannot permanently strand a valid verification.
 
 The production implementation is `PostgresReplayStore`. It uses a transaction plus database uniqueness constraints:
 
@@ -48,7 +48,7 @@ The persisted binding therefore includes:
 
 If the persistence layer is unavailable, verification must return an explicit server error and must not issue a verification attestation.
 
-If a uniqueness constraint reports a replay, verification must fail without issuing an attestation.
+If a uniqueness constraint reports a conflicting replay, verification must fail without issuing an attestation. An exact existing binding may be recovered without issuing a new semantic acceptance for a different payment or condition.
 
 The verification service signs the attestation before claiming persistent replay state, so a signing failure does not consume a replay slot.
 
@@ -61,4 +61,4 @@ Before production verification is enabled:
 3. Confirm the callback/session store and replay store use the same production database.
 4. Run the persistent replay race test against the actual managed Postgres instance.
 5. Confirm database failure produces no verification attestation.
-6. Confirm a reused session and reused proof identifier both fail closed.
+6. Confirm conflicting reuse of a session or proof identifier fails closed, while an exact retry of the same binding is idempotent.
