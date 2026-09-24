@@ -22,16 +22,22 @@ export async function GET(request: Request) {
     if (suppliedHash.length !== storedHash.length || !timingSafeEqual(suppliedHash, storedHash)) {
       return NextResponse.json({error:"Invalid Reclaim session status token."},{status:403});
     }
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       sessionId:session.sessionId,
-      status:session.status,
-      paymentId:session.paymentId,
-      conditionHash:session.conditionHash,
-      proof:session.proof,
-      proofIdentifier:session.proofIdentifier,
-      verificationSignature:session.verificationSignature,
-      error:session.error
-    });
+      status:session.status
+    };
+
+    if (session.status === "verified") {
+      response.paymentId = session.paymentId;
+      response.conditionHash = session.conditionHash;
+      response.proof = session.proof;
+      response.proofIdentifier = session.proofIdentifier;
+      response.verificationSignature = session.verificationSignature;
+    } else if (session.status === "failed") {
+      response.error = session.error;
+    }
+
+    return NextResponse.json(response);
   } finally {
     await sessions.close();
   }
