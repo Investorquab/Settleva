@@ -4,7 +4,18 @@ import { buildVerificationAttestationHash } from "@settleva/sdk";
 import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
 import { findMatchingVerifiedProofData, PostgresReplayStore } from "@settleva/verification";
 import { keccak256, stringToHex, type Hex } from "viem";
-import { extractedParametersToClaims, parseProofContext, parseProofIdentifier } from "./reclaim-binding.js";
+import { extractedParametersToClaims } from "./reclaim-binding.js";
+import {
+  assertConditionCommitment,
+  assertConditionEvaluation,
+  assertGitHubDeploymentEvidence,
+  assertProofIdentifier,
+  assertProviderPin,
+  assertResolvedProviderPin,
+  assertSingleProof,
+  assertVerifiedContextBinding,
+  assertVerifiedProofDataBinding
+} from "./reclaim-decision.js";
 import { privateKeyToAccount } from "viem/accounts";
 
 export interface ReclaimVerificationInput {
@@ -38,27 +49,29 @@ export interface ReclaimVerificationResult {
 }
 
 export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): Promise<ReclaimVerificationResult> {
-  if (input.proofs.length !== 1) throw new Error("Exactly one Reclaim proof is required for this payment condition.");
-  if (hashCondition(input.condition) !== input.expectedConditionHash) throw new Error("Payment condition does not match the committed proof context.");
+  assertSingleProof(input.proofs);
+  assertConditionCommitment(
+    input.condition,
+    input.expectedConditionHash,
+    hashCondition(input.condition)
+  );
 
   const appId = process.env.RECLAIM_APP_ID;
   const appSecret = process.env.RECLAIM_APP_SECRET;
   const verifierPrivateKey = process.env.SETTLEVA_VERIFIER_PRIVATE_KEY as Hex | undefined;
   if (!appId || !appSecret || !verifierPrivateKey) throw new Error("Reclaim credentials and Settleva verifier signing key are not configured.");
-  if (input.condition.provider !== input.expectedProviderId) throw new Error("Payment condition provider does not match the configured Reclaim provider.");
-  if (input.condition.providerVersion !== input.expectedProviderVersion) throw new Error("Payment condition provider version does not match the configured Reclaim provider version.");
+  assertProviderPin(input.condition,input.expectedProviderId,input.expectedProviderVersion);
 
   const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{log:false});
   const {providerId,providerVersion} = requestConfig.getProviderVersion();
-  if (providerId !== input.expectedProviderId || providerVersion !== input.expectedProviderVersion) throw new Error("Configured Reclaim provider version does not match the provider version resolved for this request.");
+  assertResolvedProviderPin(providerId,providerVersion,input.expectedProviderId,input.expectedProviderVersion);
 
   const result = await verifyProof(input.proofs as Parameters<typeof verifyProof>[0],{providerId,providerVersion});
   if (!result.isVerified) throw new Error(result.error?.message || "Reclaim rejected the proof.");
 
   const proof = input.proofs[0] as Record<string, unknown>;
   const claimData = proof.claimData as Record<string, unknown> | undefined;
-  const proofIdentifier = parseProofIdentifier(claimData?.identifier);
-  if (!proofIdentifier) throw new Error("Verified Reclaim proof has no valid claim identifier.");
+  const proofIdentifier = assertProofIdentifier(claimData?.identifier);
 
   const data = Array.isArray(result.data) ? result.data : [];
   const matchingProof = findMatchingVerifiedProofData(data,{
@@ -66,24 +79,23 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
     paymentId:input.expectedPaymentId,
     conditionHash:input.expectedConditionHash
   });
-  if (!matchingProof) throw new Error("Proof is not bound to the initiated Reclaim session, payment, condition, and verified extracted parameters.");
+  assertVerifiedProofDataBinding(Boolean(matchingProof));
 
-  const contextValue = matchingProof.context?.contextMessage;
-  if (typeof contextValue !== "string") throw new Error("Verified proof context message is missing.");
-  const parsedContext = parseProofContext(contextValue);
-  if (!parsedContext || parsedContext.paymentId !== input.expectedPaymentId || parsedContext.conditionHash !== input.expectedConditionHash) throw new Error("Verified proof context does not match the committed payment binding.");
+  const contextValue = matchingProof?.context?.contextMessage;
+  assertVerifiedContextBinding(contextValue,input.expectedPaymentId,input.expectedConditionHash);
 
-  const claims = extractedParametersToClaims(matchingProof.extractedParameters!);
+  const claims = extractedParametersToClaims(matchingProof!.extractedParameters!);
 
   // The first production provider is intentionally schema-pinned: when the
   // committed condition is the GitHub deployment condition, require the
   // complete five-field deployment evidence shape before evaluation.
-  if (isGitHubDeploymentCondition(input.condition) && !extractGitHubDeploymentClaims(claims)) {
-    throw new Error("GitHub deployment evidence is incomplete or malformed.");
-  }
+  assertGitHubDeploymentEvidence(
+    isGitHubDeploymentCondition(input.condition),
+    Boolean(extractGitHubDeploymentClaims(claims))
+  );
 
   const evaluation = evaluateClaims(input.condition,claims);
-  if (!evaluation.valid) throw new Error(`Condition failed: ${evaluation.failures.join(", ")}`);
+  assertConditionEvaluation(evaluation.valid,evaluation.failures);
 
   // Sign before claiming replay state so a signing failure cannot consume the
   // session/proof binding and leave a valid callback permanently unrecoverable.
