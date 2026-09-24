@@ -24,3 +24,5 @@ export interface ProofProvider {
 
 export * from "./replay-store.js";
 export * from "./verified-data.js";
+
+export * from "./postgres-replay-store.js";
