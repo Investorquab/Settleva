@@ -145,19 +145,6 @@ export default function Home() {
     } catch(e){setProofStatus("");setError(e instanceof Error?e.message:"Could not complete Reclaim.");}
   }
 
-  async function verifyProofServerSide() {
-    setError(""); setVerifying(true);
-    try {
-      if(!result || !proof) throw new Error("Generate a proof first.");
-      const response=await fetch("/api/reclaim/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({proofs:proof,sessionId:reclaimSessionId,expectedContext:result.proofContext,condition:result.request.condition})});
-      const body=await response.json() as {verified?:boolean;error?:string;verificationSignature?:Hex};
-      if(!response.ok || !body.verified || !body.verificationSignature) throw new Error(body.error || "Proof verification failed.");
-      setVerificationSignature(body.verificationSignature);
-      setProofVerified(true);
-      setProofStatus("Server-side Reclaim verification passed.");
-    } catch(e){setError(e instanceof Error?e.message:"Proof verification failed.");}
-    finally{setVerifying(false);}
-  }
 
   async function settlePayment() {
     setError(""); setSettling(true);
@@ -217,8 +204,7 @@ export default function Home() {
         </div>
         {result && <button disabled={funding} onClick={()=>void fundPayment()} style={{marginTop:10,width:"100%"}}>{funding?"Funding…":"Approve + fund on Arc"}</button>}
         {result && txHash && <button onClick={()=>void requestProof()} style={{marginTop:10,width:"100%"}}>Request Reclaim proof</button>}
-        {proof && <button disabled={verifying} onClick={()=>void verifyProofServerSide()} style={{marginTop:10,width:"100%"}}>{verifying?"Verifying…":"Verify proof server-side"}</button>}
-        {proofVerified && <button disabled={settling} onClick={()=>void settlePayment()} style={{marginTop:10,width:"100%"}}>{settling?"Settling…":"Release payment with proof"}</button>}
+                {proofVerified && <button disabled={settling} onClick={()=>void settlePayment()} style={{marginTop:10,width:"100%"}}>{settling?"Settling…":"Release payment with proof"}</button>}
         {error && <p style={{color:"#b42318"}}>{error}</p>}
         {proofStatus && <p className="muted">{proofStatus}</p>}
         {txHash && <><p className="label">Funding transaction</p><pre>{txHash}</pre></>}
