@@ -60,7 +60,7 @@ export class ReclaimSessionStore {
   }
 
   async markVerified(sessionId: string, proof: unknown, proofIdentifier: string, verificationSignature: string): Promise<boolean> {
-    await this.sql`
+    const result = await this.sql`
       update settleva_reclaim_sessions
       set status = 'verified',
           proof = ${JSON.stringify(proof)},
@@ -75,7 +75,7 @@ export class ReclaimSessionStore {
   }
 
   async markFailed(sessionId: string, error: string): Promise<boolean> {
-    await this.sql`
+    const result = await this.sql`
       update settleva_reclaim_sessions
       set status = 'failed', error = ${error}, updated_at = now()
       where session_id = ${sessionId}
