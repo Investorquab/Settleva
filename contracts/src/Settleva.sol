@@ -97,21 +97,16 @@ contract Settleva {
 
         if (keccak256(bytes(proof.claimInfo.provider)) != payment.providerHash) revert ProviderMismatch();
 
-        // The SDK commits this exact JSON proof context. Compare its hash rather
-        // than searching for substrings so duplicate/conflicting JSON keys cannot
-        // satisfy the payment binding.
-        bytes32 expectedContextHash = keccak256(
-            bytes(
-                string.concat(
-                    '{"contextAddress":"',
-                    _toHex(paymentId),
-                    '","contextMessage":"',
-                    _toHex(payment.conditionHash),
-                    '"}'
-                )
-            )
-        );
-        if (keccak256(bytes(proof.claimInfo.context)) != expectedContextHash) revert ConditionMismatch();
+        // Reclaim signs a context JSON object that contains contextAddress and
+        // contextMessage plus protocol metadata (for example session/extracted data).
+        // Bind the two application-controlled fields without requiring an exact
+        // whole-object serialization, while rejecting duplicate keys.
+        string memory expectedAddress = string.concat('"contextAddress":"', _toHex(paymentId), '"');
+        string memory expectedMessage = string.concat('"contextMessage":"', _toHex(payment.conditionHash), '"');
+        if (_countOccurrences(proof.claimInfo.context, '"contextAddress"') != 1) revert ConditionMismatch();
+        if (_countOccurrences(proof.claimInfo.context, '"contextMessage"') != 1) revert ConditionMismatch();
+        if (_countOccurrences(proof.claimInfo.context, expectedAddress) != 1) revert ConditionMismatch();
+        if (_countOccurrences(proof.claimInfo.context, expectedMessage) != 1) revert ConditionMismatch();
 
         // Reject malformed/mis-bound context before crossing the external verifier
         // trust boundary. The verifier is only called after local payment bindings
@@ -168,6 +163,28 @@ contract Settleva {
 
         bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
         return ecrecover(digest, v, r, s);
+    }
+
+    function _countOccurrences(string memory haystack, string memory needle) private pure returns (uint256 count) {
+        bytes memory source = bytes(haystack);
+        bytes memory target = bytes(needle);
+        if (target.length == 0 || target.length > source.length) return 0;
+
+        for (uint256 i = 0; i <= source.length - target.length;) {
+            bool match = true;
+            for (uint256 j = 0; j < target.length; j++) {
+                if (source[i + j] != target[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                count++;
+                i += target.length;
+            } else {
+                i++;
+            }
+        }
     }
 
     function _toHex(bytes32 value) private pure returns (string memory) {
