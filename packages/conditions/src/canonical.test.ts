@@ -17,6 +17,17 @@ if (!hashCondition(condition).startsWith("0x") || hashCondition(condition).lengt
 if (buildProofContext(condition) !== hashCondition(condition)) throw new Error("proof context mismatch");
 if (hashProofContext(condition).length !== 66) throw new Error("context hash failed");
 
+const reordered = {
+  ...condition,
+  claims: [...condition.claims].reverse()
+};
+if (canonicalizeCondition(condition) !== canonicalizeCondition(reordered)) {
+  throw new Error("claim ordering must not affect canonicalization");
+}
+if (hashCondition(condition) !== hashCondition(reordered)) {
+  throw new Error("claim ordering must not affect condition hash");
+}
+
 const passed = evaluateClaims(condition, [
   {field:"repo.public", value:"true"},
   {field:"repo.owner", value:"Investorquab"}
@@ -28,3 +39,17 @@ const failed = evaluateClaims(condition, [
   {field:"repo.owner", value:"Investorquab"}
 ]);
 if (failed.valid || failed.failures[0] !== "VALUE_MISMATCH:repo.public") throw new Error("mismatched claim should fail");
+
+const expired = evaluateClaims(condition, [
+  {field:"repo.public", value:"true"},
+  {field:"repo.owner", value:"Investorquab"}
+], condition.expiresAt);
+if (expired.valid || !expired.failures.includes("CONDITION_EXPIRED")) {
+  throw new Error("expired conditions must fail evaluation");
+}
+
+const justBeforeExpiry = evaluateClaims(condition, [
+  {field:"repo.public", value:"true"},
+  {field:"repo.owner", value:"Investorquab"}
+], condition.expiresAt - 1);
+if (!justBeforeExpiry.valid) throw new Error("condition should remain valid immediately before expiry");
