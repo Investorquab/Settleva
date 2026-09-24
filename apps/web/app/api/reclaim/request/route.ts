@@ -59,6 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json({error:"Reclaim server credentials and the pinned provider version are not configured."},{status:503});
     }
     if (condition.provider !== providerId) return NextResponse.json({error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
+    if (condition.providerVersion !== configuredProviderVersion) return NextResponse.json({error:"Payment condition provider version does not match the configured Reclaim provider version."},{status:400});
 
     const requestConfig = await ReclaimProofRequest.init(appId,appSecret,providerId,{log:false});
     const {providerId:resolvedProviderId,providerVersion} = requestConfig.getProviderVersion();
