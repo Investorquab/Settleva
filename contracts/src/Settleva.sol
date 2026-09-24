@@ -171,14 +171,14 @@ contract Settleva {
         if (target.length == 0 || target.length > source.length) return 0;
 
         for (uint256 i = 0; i <= source.length - target.length;) {
-            bool match = true;
+            bool isMatch = true;
             for (uint256 j = 0; j < target.length; j++) {
                 if (source[i + j] != target[j]) {
-                    match = false;
+                    isMatch = false;
                     break;
                 }
             }
-            if (match) {
+            if (isMatch) {
                 count++;
                 i += target.length;
             } else {
