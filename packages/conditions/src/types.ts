@@ -26,9 +26,13 @@ export interface ConditionEvaluation {
 
 export function evaluateClaims(
   condition: PaymentCondition,
-  claims: readonly VerifiedClaim[]
+  claims: readonly VerifiedClaim[],
+  now = Math.floor(Date.now() / 1000)
 ): ConditionEvaluation {
   const failures: string[] = [];
+  if (!Number.isSafeInteger(now) || now >= condition.expiresAt) {
+    failures.push("CONDITION_EXPIRED");
+  }
   for (const expected of condition.claims) {
     const actual = claims.find((claim) => claim.field === expected.field);
     if (!actual) {
