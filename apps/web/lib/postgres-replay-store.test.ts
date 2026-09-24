@@ -19,8 +19,10 @@ test("persistent replay store accepts only one concurrent identical claim", {ski
       primary key (identifier_type, identifier)
     )
   `;
-  await sql`create unique index if not exists settleva_reclaim_replay_session_idx on settleva_reclaim_replay (session_id)`;
-  await sql`create unique index if not exists settleva_reclaim_replay_proof_idx on settleva_reclaim_replay (proof_identifier)`;
+  await sql`drop index if exists settleva_reclaim_replay_session_idx`;
+  await sql`drop index if exists settleva_reclaim_replay_proof_idx`;
+  await sql`create unique index settleva_reclaim_replay_session_idx on settleva_reclaim_replay (session_id) where identifier_type = 'session'`;
+  await sql`create unique index settleva_reclaim_replay_proof_idx on settleva_reclaim_replay (proof_identifier) where identifier_type = 'proof'`;
 
   const suffix = `ci-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const binding = {
