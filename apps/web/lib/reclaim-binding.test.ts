@@ -1,5 +1,4 @@
-// @ts-expect-error Node runs this test directly from the TypeScript source.\nimport assert from "node:assert/strict";
-import { strict as assert } from "node:assert";
+import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   extractedParametersToClaims,
