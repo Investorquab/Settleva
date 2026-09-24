@@ -1,5 +1,5 @@
 import { keccak256, stringToHex } from "viem";
-import type { PaymentCondition } from "@settleva/conditions";
+import { canonicalizeCondition, type PaymentCondition } from "@settleva/conditions";
 
 export interface PaymentIdInput {
   readonly payer: string;
@@ -17,7 +17,7 @@ export function derivePaymentId(input: PaymentIdInput): `0x${string}` {
     token: input.token.toLowerCase(),
     amount: input.amount,
     expiry: input.expiry,
-    condition: input.condition
+    condition: canonicalizeCondition(input.condition)
   });
 
   return keccak256(stringToHex(payload));
