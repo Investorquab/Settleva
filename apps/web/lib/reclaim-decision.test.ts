@@ -63,7 +63,6 @@ test("verified context message must equal the committed condition hash", () => {
   assert.throws(() => assertVerifiedContextBinding(undefined, conditionHash), /context message/);
 });
 
-});
 
 test("verified proof data must be present on the same entry", () => {
   assert.doesNotThrow(() => assertVerifiedProofDataBinding(true));
