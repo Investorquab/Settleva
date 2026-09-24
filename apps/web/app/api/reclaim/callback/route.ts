@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
 import { ReclaimVerificationError, verifyReclaimAndAttest } from "../../../../lib/reclaim-verification.js";
+import { resolveVerificationCommit, shouldMarkCallbackFailed } from "../../../../lib/reclaim-decision.js";
 
 export const runtime = "nodejs";
 
@@ -49,11 +50,11 @@ export async function POST(request: Request) {
         });
 
         const transitioned = await sessions.markVerified(sessionId,result.proof,result.proofIdentifier,result.verificationSignature);
-        if (!transitioned) {
-          const current = await sessions.get(sessionId);
-          if (current?.status === "verified") {
-            return NextResponse.json({received:true,verified:true,sessionId});
-          }
+        const commitStatus = resolveVerificationCommit(transitioned, transitioned ? "verified" : (await sessions.get(sessionId))?.status ?? null);
+        if (commitStatus === "already-committed") {
+          return NextResponse.json({received:true,verified:true,sessionId});
+        }
+        if (commitStatus === "conflict") {
           return NextResponse.json(
             {received:true,verified:false,sessionId,error:"Reclaim session changed state before verification could be committed."},
             {status:409}
@@ -63,7 +64,8 @@ export async function POST(request: Request) {
       } catch (error) {
         const message = error instanceof Error ? error.message : "Reclaim verification failed.";
         const retryable = error instanceof ReclaimVerificationError && (error.code === "DATABASE" || error.code === "REPLAY");
-        if (!retryable) {
+        const currentStatus = (await sessions.get(sessionId))?.status ?? null;
+        if (shouldMarkCallbackFailed(retryable, currentStatus)) {
           await sessions.markFailed(sessionId,message);
         }
         const status = retryable
