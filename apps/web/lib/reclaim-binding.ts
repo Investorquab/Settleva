@@ -10,6 +10,14 @@ export interface VerifiedClaim {
   readonly value: string;
 }
 
+const RECLAIM_GITHUB_FIELD_MAP: Readonly<Record<string, string>> = {
+  github_repo_full_name: "github.repo.full_name",
+  github_deployment_ref: "github.deployment.ref",
+  github_deployment_sha: "github.deployment.sha",
+  github_deployment_environment: "github.deployment.environment",
+  github_deployment_status: "github.deployment.status"
+};
+
 export function parseProofContext(value: string): ParsedProofContext | null {
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
@@ -41,7 +49,7 @@ export function extractedParametersToClaims(
   extractedParameters: Record<string, unknown>
 ): VerifiedClaim[] {
   return Object.entries(extractedParameters).map(([field, value]) => ({
-    field,
+    field: RECLAIM_GITHUB_FIELD_MAP[field] ?? field,
     value: String(value)
   }));
 }
