@@ -43,12 +43,76 @@ test("parseProofIdentifier accepts only a 32-byte hex identifier", () => {
   assert.equal(parseProofIdentifier(undefined), null);
 });
 
-test("extracted parameters become deterministic string claims", () => {
+test("published Reclaim GitHub parameters map to canonical dotted claims", () => {
+  assert.deepEqual(
+    extractedParametersToClaims({
+      github_repo_full_name: "Investorquab/Settleva",
+      github_deployment_ref: "main",
+      github_deployment_sha: "6dd48e33fa2dada31d33dd77c8294c61987e81d9",
+      github_deployment_environment: "production",
+      github_deployment_status: "success"
+    }),
+    [
+      {field: "github.repo.full_name", value: "Investorquab/Settleva"},
+      {field: "github.deployment.ref", value: "main"},
+      {field: "github.deployment.sha", value: "6dd48e33fa2dada31d33dd77c8294c61987e81d9"},
+      {field: "github.deployment.environment", value: "production"},
+      {field: "github.deployment.status", value: "success"}
+    ]
+  );
+});
+
+test("published Reclaim mapping preserves incomplete and unknown fields", () => {
+  assert.deepEqual(
+    extractedParametersToClaims({
+      github_repo_full_name: "Investorquab/Settleva",
+      github_deployment_status: "success",
+      unrelated: "value"
+    }),
+    [
+      {field: "github.repo.full_name", value: "Investorquab/Settleva"},
+      {field: "github.deployment.status", value: "success"},
+      {field: "unrelated", value: "value"}
+    ]
+  );
+
+  const incomplete = extractedParametersToClaims({
+    github_repo_full_name: "Investorquab/Settleva",
+    github_deployment_status: "success"
+  });
+  assert.equal(
+    incomplete.some(({field}) => field === "github.deployment.ref"),
+    false
+  );
+  assert.equal(
+    incomplete.some(({field}) => field === "github.deployment.sha"),
+    false
+  );
+  assert.equal(
+    incomplete.some(({field}) => field === "github.deployment.environment"),
+    false
+  );
+});
+
+test("published Reclaim aliases preserve duplicate claims for downstream rejection", () => {
+  assert.deepEqual(
+    extractedParametersToClaims({
+      "github.repo.full_name": "Investorquab/Settleva",
+      github_repo_full_name: "Investorquab/Settleva"
+    }),
+    [
+      {field: "github.repo.full_name", value: "Investorquab/Settleva"},
+      {field: "github.repo.full_name", value: "Investorquab/Settleva"}
+    ]
+  );
+});
+
+test("existing canonical dotted fields remain unchanged", () => {
   assert.deepEqual(
     extractedParametersToClaims({
       "github.repo.full_name": "Investorquab/Settleva",
       "github.deployment.status": "success",
-      "attempt": 2
+      attempt: 2
     }),
     [
       {field: "github.repo.full_name", value: "Investorquab/Settleva"},
