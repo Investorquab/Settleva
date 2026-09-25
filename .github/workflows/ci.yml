@@ -35,6 +35,7 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm -r check
       - run: pnpm -r test
+      - run: pnpm -r build
 
   contracts:
     runs-on: ubuntu-latest
@@ -49,3 +50,18 @@ jobs:
       - name: Run Foundry tests
         working-directory: contracts
         run: forge test -vvv
+
+  deployment-evidence:
+    name: Record production deployment evidence
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [typecheck, contracts]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Record validated commit
+        run: |
+          echo "Settleva production deployment evidence"
+          echo "repository=${{ github.repository }}"
+          echo "ref=${{ github.ref_name }}"
+          echo "sha=${{ github.sha }}"
