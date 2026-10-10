@@ -1,64 +1,41 @@
 # Settleva Contracts
 
-The contract layer has two explicit verification boundaries.
+Settleva escrows ERC-20 payments and releases them only when a trusted verification service signs an attestation for the exact funded commitment.
 
-## Reclaim proof boundary
+## Verification model
 
-`IReclaimVerifier` models the Reclaim Solidity verifier entry point. A successful verifier call establishes that the supplied proof passed Reclaim's cryptographic verification.
+Reclaim proof verification and semantic condition evaluation happen in the backend using Reclaim's maintained JavaScript SDK. The backend must:
 
-Settleva additionally binds the proof to the funded payment by checking:
+- verify the raw proof cryptographically with the pinned provider ID and exact provider version;
+- bind the proof to a Reclaim session initiated for this payment;
+- check the signed context against the payment ID and canonical condition hash;
+- evaluate the verified extracted parameters against every committed condition claim;
+- reject duplicate/replayed proofs using persistent replay protection;
+- only then sign the settlement attestation.
 
-1. The proof provider hash matches the funded provider.
-2. Reclaim accepts the proof.
-3. The signed Reclaim context binds the funded payment: `contextAddress = paymentId` and `contextMessage = conditionHash`. Reclaim may include additional signed context metadata (such as session/extracted data), so Settleva does not require whole-object JSON serialization to remain byte-for-byte identical.
-4. The proof identifier has not already been used.
+The contract checks the signer against its immutable `verificationSigner`, and the signature commits to `paymentId`, the stored `conditionHash`, stored `providerHash`, and the Reclaim `proofIdentifier`. It also enforces payee-only release, expiry, payment status, proof-identifier uniqueness, and ERC-20 transfer success.
 
-## Semantic verification boundary
+**Trust boundary:** this is backend-attested settlement, not trustless on-chain Reclaim proof verification. Compromise of the verification-signing key could authorize invalid settlements. Keep it server-side, never expose it to the browser, and use a dedicated key with minimal balance and documented rotation/revocation procedures. The contract has no signer rotation function, so changing the signer requires a new deployment.
 
-Reclaim's verified `extractedParameters` still need to be evaluated against Settleva's structured condition. Reclaim's on-chain documentation also makes clear that proof verification is a separate boundary from application business logic.
+## Arc mainnet
 
-Settleva therefore requires the backend verification service to sign a settlement attestation only after it has:
+- Chain ID: `5042`
+- RPC: `https://rpc.mainnet.arc.io`
+- Arc USDC: `0x3600000000000000000000000000000000000000` (6 decimals)
 
-- verified the Reclaim proof;
-- checked the pinned provider ID and exact provider version;
-- checked the payment-bound context;
-- evaluated every committed condition claim against the verified extracted parameters.
+## Deploy
 
-The on-chain contract verifies that attestation against the exact payment ID, condition hash, provider hash and Reclaim proof identifier. A payee cannot bypass semantic verification by submitting a valid Reclaim proof directly.
-
-This signer is a deliberate trust boundary: compromise of the verification-signing key could authorize an invalid settlement. Production deployment therefore requires secure key management, rotation/revocation planning and an independent review of the verifier service.
-
-## Arc mainnet deployment
-
-Arc mainnet is chain ID `5042`. Circle lists Arc USDC as an ERC-20 at:
-
-`0x3600000000000000000000000000000000000000`
-
-Arc USDC uses 6 ERC-20 decimals. This is recorded as network configuration reference only; Settleva does not hardcode a token address into the settlement contract.
-
-The deployment script intentionally requires explicit environment variables. No Reclaim verifier address is hardcoded because the exact verifier deployment must be confirmed for the target network before deployment.
-
-Required deployment variables:
+The script refuses to run unless the connected chain ID is Arc mainnet (`5042`). Configure:
 
 - `DEPLOYER_PRIVATE_KEY`
-- `RECLAIM_VERIFIER`
-- `VERIFICATION_SIGNER`
+- `VERIFICATION_SIGNER` — the address derived from the backend's `SETTLEVA_VERIFIER_PRIVATE_KEY`
 
-Deploy with Foundry after confirming the target network and RPC:
+From `contracts/`:
 
 ```bash
-cd contracts
 export DEPLOYER_PRIVATE_KEY=...
-export RECLAIM_VERIFIER=0x...
 export VERIFICATION_SIGNER=0x...
-forge script script/Deploy.s.sol:DeploySettleva \
-  --rpc-url "$ARC_MAINNET_RPC_URL" \
-  --broadcast \
-  -vvvv
+forge script script/Deploy.s.sol:DeploySettleva --rpc-url "$ARC_MAINNET_RPC_URL" --broadcast -vvvv
 ```
 
-Do not deploy until the Reclaim verifier address and the exact production provider ID/version have been independently verified.
-
-## Important deployment gate
-
-The contract still requires a real Reclaim verifier address and a real provider/version configuration before production deployment. The next production gate is an end-to-end Arc test using a real provider and real USDC, followed by security review.
+Do not put private keys in source control, client-side environment variables, logs, or chat. Before real funds are used, deploy to Arc mainnet, verify the deployed bytecode/constructor configuration, run an end-to-end low-value USDC test, and publish the contract and transaction links.
