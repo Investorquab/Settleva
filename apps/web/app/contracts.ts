@@ -21,7 +21,7 @@ export const settlevaAbi = [
     ],outputs:[]
   },
   {
-    type:"function",name:"verificationAttestationHash",stateMutability:"pure",
+    type:"function",name:"verificationAttestationHash",stateMutability:"view",
     inputs:[
       {name:"paymentId",type:"bytes32"},{name:"conditionHash",type:"bytes32"},
       {name:"providerHash",type:"bytes32"},{name:"proofIdentifier",type:"bytes32"}
