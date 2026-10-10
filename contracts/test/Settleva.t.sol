@@ -93,10 +93,13 @@ contract SettlevaTest is Test {
 
     function testAttestationBindsPaymentId() public {
         _create();
+        bytes32 secondPaymentId = keccak256("different-payment");
+        vm.prank(payer);
+        settleva.createPayment(secondPaymentId, payee, address(token), 50_000, uint64(block.timestamp + 1 days), conditionHash, providerHash);
         bytes memory signature = _signature(paymentId, signerPk);
         vm.prank(payee);
         vm.expectRevert(Settleva.InvalidVerificationSignature.selector);
-        settleva.release(keccak256("different-payment"), proofIdentifier, signature);
+        settleva.release(secondPaymentId, proofIdentifier, signature);
     }
 
     function testAttestationBindsProofIdentifier() public {
