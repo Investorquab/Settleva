@@ -3,7 +3,7 @@ import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/
 import { buildVerificationAttestationHash } from "@settleva/sdk";
 import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
 import { findMatchingVerifiedProofData, PostgresReplayStore } from "@settleva/verification";
-import { keccak256, stringToHex, type Hex } from "viem";
+import { getAddress, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
 import { extractedParametersToClaims } from "./reclaim-binding.js";
 import {
   assertConditionCommitment,
@@ -60,6 +60,18 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const appSecret = process.env.RECLAIM_APP_SECRET;
   const verifierPrivateKey = process.env.SETTLEVA_VERIFIER_PRIVATE_KEY as Hex | undefined;
   if (!appId || !appSecret || !verifierPrivateKey) throw new Error("Reclaim credentials and Settleva verifier signing key are not configured.");
+
+  const configuredChainId = process.env.SETTLEVA_CHAIN_ID;
+  const configuredContract = process.env.SETTLEVA_CONTRACT_ADDRESS;
+  if (!configuredChainId || !/^\d+$/.test(configuredChainId) || BigInt(configuredChainId) <= 0n) {
+    throw new Error("A valid SETTLEVA_CHAIN_ID is required before issuing settlement attestations.");
+  }
+  if (!configuredContract || !isAddress(configuredContract)) {
+    throw new Error("A valid SETTLEVA_CONTRACT_ADDRESS is required before issuing settlement attestations.");
+  }
+  const chainId = BigInt(configuredChainId);
+  const verifyingContract: Address = getAddress(configuredContract);
+
   assertProviderPin(input.condition,input.expectedProviderId,input.expectedProviderVersion);
 
   const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{log:false});
@@ -86,9 +98,6 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
 
   const claims = extractedParametersToClaims(matchingProof!.extractedParameters!);
 
-  // The first production provider is intentionally schema-pinned: when the
-  // committed condition is the GitHub deployment condition, require the
-  // complete five-field deployment evidence shape before evaluation.
   assertGitHubDeploymentEvidence(
     isGitHubDeploymentCondition(input.condition),
     Boolean(extractGitHubDeploymentClaims(claims))
@@ -97,11 +106,13 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const evaluation = evaluateClaims(input.condition,claims);
   assertConditionEvaluation(evaluation.valid,evaluation.failures);
 
-  // Sign before claiming replay state so a signing failure cannot consume the
-  // session/proof binding and leave a valid callback permanently unrecoverable.
+  // Domain-bind the signature to the configured chain and exact deployed contract.
+  // Missing or invalid deployment configuration fails closed before any signature is issued.
   const account = privateKeyToAccount(verifierPrivateKey);
   const verificationSignature = await account.signMessage({
     message:{raw:buildVerificationAttestationHash({
+      chainId,
+      verifyingContract,
       paymentId:input.expectedPaymentId as Hex,
       conditionHash:input.expectedConditionHash,
       providerHash:keccak256(stringToHex(providerId)),

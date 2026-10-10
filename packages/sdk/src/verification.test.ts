@@ -4,6 +4,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { buildVerificationAttestationHash } from "./verification.js";
 
 const base = {
+  chainId: 5042n,
+  verifyingContract: "0x1234567890123456789012345678901234567890" as const,
   paymentId: keccak256(stringToHex("payment-1")),
   conditionHash: keccak256(stringToHex("condition-1")),
   providerHash: keccak256(stringToHex("provider-1")),
@@ -14,10 +16,21 @@ const first = buildVerificationAttestationHash(base);
 assert.equal(first.length, 66);
 assert.equal(first, buildVerificationAttestationHash(base));
 
-for (const field of Object.keys(base) as Array<keyof typeof base>) {
+for (const field of ["paymentId", "conditionHash", "providerHash", "proofIdentifier"] as const) {
   const mutated = {...base, [field]: keccak256(stringToHex(`mutated-${field}`))};
   assert.notEqual(buildVerificationAttestationHash(mutated), first, `attestation must bind ${field}`);
 }
+
+assert.notEqual(
+  buildVerificationAttestationHash({...base, chainId: 1n}),
+  first,
+  "attestation must bind chain ID"
+);
+assert.notEqual(
+  buildVerificationAttestationHash({...base, verifyingContract: "0x9999999999999999999999999999999999999999"}),
+  first,
+  "attestation must bind the verifying contract"
+);
 
 const signer = privateKeyToAccount("0x0123456789012345678901234567890123456789012345678901234567890123");
 const signature = await signer.signMessage({message:{raw:first}});

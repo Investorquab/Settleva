@@ -44,11 +44,22 @@ contract SettlevaTest is Test {
         settleva.createPayment(paymentId, payee, address(token), 100_000, uint64(block.timestamp + 1 days), conditionHash, providerHash);
     }
 
-    function _signature(bytes32 id, uint256 privateKey) internal returns (bytes memory) {
-        bytes32 digest = keccak256(abi.encode(id, conditionHash, providerHash, proofIdentifier));
+    function _signatureFor(
+        bytes32 id,
+        uint256 privateKey,
+        uint256 chainId,
+        address verifyingContract
+    ) internal returns (bytes memory) {
+        bytes32 digest = keccak256(
+            abi.encode(chainId, verifyingContract, id, conditionHash, providerHash, proofIdentifier)
+        );
         bytes32 ethSignedDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, ethSignedDigest);
         return abi.encodePacked(r, s, v);
+    }
+
+    function _signature(bytes32 id, uint256 privateKey) internal returns (bytes memory) {
+        return _signatureFor(id, privateKey, block.chainid, address(settleva));
     }
 
     function _status(bytes32 id) internal view returns (uint256) {
@@ -110,6 +121,22 @@ contract SettlevaTest is Test {
         settleva.release(paymentId, keccak256("different-proof"), signature);
     }
 
+    function testAttestationRejectsDifferentChainId() public {
+        _create();
+        bytes memory signature = _signatureFor(paymentId, signerPk, block.chainid + 1, address(settleva));
+        vm.prank(payee);
+        vm.expectRevert(Settleva.InvalidVerificationSignature.selector);
+        settleva.release(paymentId, proofIdentifier, signature);
+    }
+
+    function testAttestationRejectsDifferentContractAddress() public {
+        _create();
+        bytes memory signature = _signatureFor(paymentId, signerPk, block.chainid, address(0xBEEF));
+        vm.prank(payee);
+        vm.expectRevert(Settleva.InvalidVerificationSignature.selector);
+        settleva.release(paymentId, proofIdentifier, signature);
+    }
+
     function testZeroProofIdentifierReverts() public {
         _create();
         vm.prank(payee);
@@ -163,7 +190,9 @@ contract SettlevaTest is Test {
     }
 
     function testAttestationHashHelperMatchesExpectedDigest() public {
-        bytes32 expected = keccak256(abi.encode(paymentId, conditionHash, providerHash, proofIdentifier));
+        bytes32 expected = keccak256(
+            abi.encode(block.chainid, address(settleva), paymentId, conditionHash, providerHash, proofIdentifier)
+        );
         assertEq(settleva.verificationAttestationHash(paymentId, conditionHash, providerHash, proofIdentifier), expected);
     }
 }

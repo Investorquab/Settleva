@@ -81,7 +81,7 @@ contract Settleva {
     }
 
     /// @notice Release a funded payment using an attestation from the configured verifier service.
-    /// @dev The signed digest commits to paymentId, the stored conditionHash/providerHash, and proofIdentifier.
+    /// @dev The digest commits to chain ID, this contract address, payment ID, condition, provider and proof ID.
     function release(
         bytes32 paymentId,
         bytes32 proofIdentifier,
@@ -95,7 +95,14 @@ contract Settleva {
         if (usedProofIdentifiers[proofIdentifier]) revert ProofAlreadyUsed();
 
         bytes32 attestationHash = keccak256(
-            abi.encode(paymentId, payment.conditionHash, payment.providerHash, proofIdentifier)
+            abi.encode(
+                block.chainid,
+                address(this),
+                paymentId,
+                payment.conditionHash,
+                payment.providerHash,
+                proofIdentifier
+            )
         );
         if (_recoverSigner(attestationHash, verificationSignature) != verificationSigner) {
             revert InvalidVerificationSignature();
@@ -113,8 +120,17 @@ contract Settleva {
         bytes32 conditionHash,
         bytes32 providerHash,
         bytes32 proofIdentifier
-    ) external pure returns (bytes32) {
-        return keccak256(abi.encode(paymentId, conditionHash, providerHash, proofIdentifier));
+    ) external view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                block.chainid,
+                address(this),
+                paymentId,
+                conditionHash,
+                providerHash,
+                proofIdentifier
+            )
+        );
     }
 
     function _recoverSigner(bytes32 messageHash, bytes memory signature) private pure returns (address) {
