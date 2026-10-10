@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ReclaimProofRequest, transformForOnchain } from "@reclaimprotocol/js-sdk";
+import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { createPublicClient, createWalletClient, custom, http, parseUnits, type Address, type Hex } from "viem";
 import { prepareCreatePayment } from "@settleva/sdk";
 import type { PaymentCondition } from "@settleva/conditions";
@@ -44,6 +44,7 @@ export default function Home() {
   const [proof,setProof] = useState<unknown[]|null>(null);
   const [proofVerified,setProofVerified] = useState(false);
   const [verificationSignature,setVerificationSignature] = useState<Hex | "">("");
+  const [proofIdentifier,setProofIdentifier] = useState<Hex | "">("");
   const [reclaimSessionId,setReclaimSessionId] = useState("");
   const [reclaimStatusToken,setReclaimStatusToken] = useState("");
   const [funding,setFunding] = useState(false);
@@ -66,7 +67,7 @@ export default function Home() {
   }),[provider,providerVersion,repository,ref,sha,environment,status,expiresAt]);
 
   function prepare() {
-    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setVerificationSignature(""); setReclaimSessionId(""); setReclaimStatusToken(""); setSettlementTx("");
+    setError(""); setResult(null); setTxHash(""); setProof(null); setProofVerified(false); setVerificationSignature(""); setProofIdentifier(""); setReclaimSessionId(""); setReclaimStatusToken(""); setSettlementTx("");
     try {
       if (!payer || !payee || !token) throw new Error("Enter payer, payee and token addresses.");
       setResult(prepareCreatePayment({payer:payer as Address,payee:payee as Address,token:token as Address,amount,expiry:Number(expiresAt),condition}));
@@ -131,10 +132,11 @@ export default function Home() {
         await new Promise((resolve)=>setTimeout(resolve,2000));
         const statusResponse=await fetch(`/api/reclaim/status?sessionId=${encodeURIComponent(body.sessionId)}&statusToken=${encodeURIComponent(body.statusToken)}`);
         const status=await statusResponse.json() as {
-          status?:string; proof?:unknown; verificationSignature?:Hex; error?:string
+          status?:string; proof?:unknown; proofIdentifier?:Hex; verificationSignature?:Hex; error?:string
         };
-        if (status.status === "verified" && status.proof && status.verificationSignature) {
+        if (status.status === "verified" && status.proof && status.proofIdentifier && status.verificationSignature) {
           setProof(Array.isArray(status.proof) ? status.proof : [status.proof]);
+          setProofIdentifier(status.proofIdentifier);
           setVerificationSignature(status.verificationSignature);
           setProofVerified(true);
           setProofStatus("Backend callback verified the Reclaim proof.");
@@ -151,16 +153,14 @@ export default function Home() {
   async function settlePayment() {
     setError(""); setSettling(true);
     try {
-      if(!result || !proof || !proofVerified || !verificationSignature) throw new Error("Verify the Reclaim proof first.");
-      const raw=proof[0] as Parameters<typeof transformForOnchain>[0];
-      const transformed=transformForOnchain(raw);
+      if(!result || !proof || !proofVerified || !proofIdentifier || !verificationSignature) throw new Error("Verify the Reclaim proof first.");
       const {walletClient,publicClient}=arcClients();
       const accounts=await window.ethereum?.request({method:"eth_requestAccounts"}) as string[];
       const account=accounts?.[0] as Address|undefined;
       if(!account || account.toLowerCase()!==result.request.payee.toLowerCase()) throw new Error("Connect the payee wallet to settle this payment.");
       const hash=await walletClient.writeContract({
         account,address:SETTLEVA_ADDRESS,abi:settlevaAbi,functionName:"release",
-        args:[result.paymentId,transformed,verificationSignature]
+        args:[result.paymentId,proofIdentifier,verificationSignature]
       });
       setSettlementTx(hash);
       await publicClient.waitForTransactionReceipt({hash});
@@ -173,7 +173,7 @@ export default function Home() {
     <div style={{marginBottom:28}}>
       <div className="muted">SETTLEVA / REFERENCE CONSOLE</div>
       <h1 style={{fontSize:48,margin:"8px 0"}}>Condition → proof → settlement.</h1>
-      <p className="muted" style={{maxWidth:700}}>Prepare an evidence-bound USDC payment without custody. Reclaim generates and verifies the proof; Settleva binds release to the exact proof context committed at funding.</p>
+      <p className="muted" style={{maxWidth:700}}>Prepare an evidence-bound USDC payment without custody. Reclaim proof verification and condition evaluation happen on the backend. Arc enforces a signed attestation bound to this payment, condition, provider and proof identifier.</p>
     </div>
     <div className="grid">
       <section className="card">
@@ -206,7 +206,7 @@ export default function Home() {
         </div>
         {result && <button disabled={funding} onClick={()=>void fundPayment()} style={{marginTop:10,width:"100%"}}>{funding?"Funding…":"Approve + fund on Arc"}</button>}
         {result && txHash && <button onClick={()=>void requestProof()} style={{marginTop:10,width:"100%"}}>Request Reclaim proof</button>}
-                {proofVerified && <button disabled={settling} onClick={()=>void settlePayment()} style={{marginTop:10,width:"100%"}}>{settling?"Settling…":"Release payment with proof"}</button>}
+                {proofVerified && <button disabled={settling} onClick={()=>void settlePayment()} style={{marginTop:10,width:"100%"}}>{settling?"Settling…":"Release with verified attestation"}</button>}
         {error && <p style={{color:"#b42318"}}>{error}</p>}
         {proofStatus && <p className="muted">{proofStatus}</p>}
         {txHash && <><p className="label">Funding transaction</p><pre>{txHash}</pre></>}
