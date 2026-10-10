@@ -63,4 +63,4 @@ Before production deployment, demonstrate that separate proofs fail for:
 - reused proof identifier;
 - invalid Settleva verification signature.
 
-A published provider ID/version is a deployment prerequisite. Until those values are verified against the actual Reclaim provider, the application must remain fail-closed.
+A published provider ID/version is a deployment prerequisite. The repository's `.env.example` files intentionally use placeholders, not a provider that Settleva has independently validated. A public Reclaim GitHub repository provider is not sufficient evidence for the five deployment claims unless its actual extracted parameters and provider version are confirmed to match this schema. Until those values are verified against the actual Reclaim provider, the application must remain fail-closed.
