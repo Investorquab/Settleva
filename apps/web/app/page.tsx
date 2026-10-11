@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import {
   PLAYGROUND_SCENARIOS,
@@ -142,8 +143,8 @@ export default function Home() {
     <main className="site-shell">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Settleva home">
-          <span className="brand-mark"><Icon name="shield" size={20} /></span>
-          <span>settleva<span className="brand-period">.</span></span>
+          <span className="brand-mark"><Image src="/settleva-mark.svg" alt="" width={34} height={34} priority /></span>
+          <span>Settleva</span>
         </a>
         <nav className="desktop-nav" aria-label="Primary navigation">
           <a href="#how-it-works">How it works</a>

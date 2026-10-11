@@ -13,8 +13,8 @@ button:focus-visible,a:focus-visible,textarea:focus-visible{outline:3px solid #7
 .section-wrap{width:min(1180px,calc(100% - 64px));margin:0 auto}
 .topbar{height:78px;width:min(1320px,calc(100% - 64px));margin:auto;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e7edf3;gap:24px}
 .brand{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:21px;letter-spacing:-1px;color:#122a49;white-space:nowrap}
-.brand-mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,#326bdc,#42a5d6);box-shadow:0 5px 14px #356bd52c}
-.brand-period{color:#3e8be9}
+.brand-mark{width:34px;height:34px;display:grid;place-items:center;flex:none}
+.brand-mark img{display:block;width:34px;height:34px}
 .desktop-nav{display:flex;gap:30px;align-items:center;color:#576b83;font-size:12px;font-weight:700}
 .desktop-nav a,.footer a{transition:color .2s ease}
 .desktop-nav a:hover,.footer a:hover{color:var(--blue)}

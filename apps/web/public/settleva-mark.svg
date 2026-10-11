@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Settleva blue boxed S monogram</title>
+  <desc>One solid blue rounded square with a diagonally slanted transparent S-shaped cutout. No gradient, shadow, text, or background.</desc>
+  <defs>
+    <mask id="s-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024" mask-type="luminance">
+      <rect width="1024" height="1024" fill="black"/>
+      <rect x="76" y="76" width="872" height="872" rx="176" fill="white"/>
+      <g transform="rotate(-35 512 512)">
+        <path d="M 718 326 C 653 267, 528 251, 422 296 C 318 340, 317 423, 431 473 L 594 541 C 707 588, 702 672, 604 720 C 505 768, 385 740, 315 674"
+          fill="none" stroke="black" stroke-width="164" stroke-linecap="butt" stroke-linejoin="round"/>
+      </g>
+    </mask>
+  </defs>
+  <rect x="76" y="76" width="872" height="872" rx="176" fill="#2C63D7" mask="url(#s-cutout)"/>
+</svg>
