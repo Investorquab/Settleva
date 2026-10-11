@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "check": "tsc --noEmit --rootDir ../..",
-    "test": "node --test",
-    "build": "next build"
+    "test": "node --test && node --check scripts/mainnet-preflight.mjs",
+    "build": "next build",
+    "preflight:mainnet": "node --env-file-if-exists=.env.production scripts/mainnet-preflight.mjs"
   },
   "dependencies": {
     "@reclaimprotocol/js-sdk": "^5.8.2",

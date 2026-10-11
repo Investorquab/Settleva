@@ -1,118 +1,75 @@
-# SETTLEVA ARCHITECTURE LOCK - WORKING DRAFT
+# Architecture Lock — Settleva
 
-## 1. Invariant
+**Status:** Current implementation contract. This file supersedes the earlier working draft that described SHA-256 condition hashes and a preferred on-chain Reclaim verifier. Those statements are not the deployed design.
 
-A payment can settle only when submitted evidence satisfies the exact condition hash committed when the payment was funded.
+## 1. Product and deployment model
 
-## 2. Components
+Settleva is developer infrastructure for policy-based conditional USDC settlement on Arc. Deploy **one shared `Settleva.sol` contract**. Each payment stores its own payer, payee, token, amount, expiry, condition hash, provider hash, and status. Gaming rewards, freelance milestones, conditional commerce, and agentic task settlement are different policy/application workflows over that same contract; they are not separate contracts.
 
-Application
--> SDK
--> condition engine
--> payment API
--> proof provider
--> verification engine
--> settlement contract
--> USDC.
+The contract is not a payment dashboard, and the playground is not a deployment wizard. Playground results are local simulations only.
 
-The application and serverless API never hold unilateral withdrawal authority.
+## 2. Canonical commitments
 
-## 3. Condition
+- A version-1.0 condition contains a provider ID, provider version, expiry, and one or more unique-field claims.
+- The only currently supported policy operator is exact string equality (`equals`).
+- Claims are sorted deterministically by field, operator, then value; the condition is canonical JSON with the stable fields `version`, `provider`, `providerVersion`, `claims`, and `expiresAt`.
+- The condition commitment is EVM-native `keccak256(UTF-8(canonical JSON))`, implemented by the shared conditions package. It is **not SHA-256**.
+- The payment ID is a deterministic keccak256 commitment to normalized payer/payee/token addresses, normalized human token amount, expiry, and canonical condition.
+- Payment expiry must equal `condition.expiresAt`. The client, SDK, backend, and funded on-chain record must agree on the exact condition hash, provider hash, and expiry.
 
-A condition is versioned structured data:
+## 3. Payment lifecycle and contract
 
-- version
-- provider
-- ordered set of typed claims
-- expiry
+The contract supports these effective states:
 
-Canonical form is deterministic JSON with claims sorted by field. The canonical bytes are hashed before funding. The resulting digest is immutable for that payment.
+- `None -> Funded`: payer approves the token and calls `createPayment`; the contract pulls the exact amount.
+- `Funded -> Released`: the payee calls `release` before expiry with a valid payment-bound verifier attestation and an unused proof identifier.
+- `Funded -> Refunded`: the payer calls `refund` at or after expiry.
 
-The implementation must use one hash algorithm consistently across TypeScript and Solidity. The current TypeScript foundation uses SHA-256 as a provisional implementation. Before contract implementation this must be reconciled with Solidity-native hashing and finalized.
+Released and refunded payments are terminal. The contract rejects invalid callers, duplicate payment IDs, invalid amounts/expiry, invalid signatures, reused proof identifiers, incorrect state, and failed ERC-20 transfers. USDC is an existing token and is not deployed by Settleva.
 
-## 4. Payment state machine
+## 4. Verification trust boundary
 
-CREATED -> FUNDED -> WAITING_FOR_PROOF
-WAITING_FOR_PROOF -> PROOF_SUBMITTED -> VERIFYING
-VERIFYING -> SETTLED
-VERIFYING -> WAITING_FOR_PROOF
-FUNDED/WAITING_FOR_PROOF -> EXPIRED -> REFUNDED
+The current model is **backend-attested settlement**, not trustless on-chain verification of Reclaim proofs:
 
-Terminal states: SETTLED, REFUNDED.
+1. The backend resolves the pinned Reclaim provider/version and cryptographically verifies the received proof.
+2. It binds the proof to the initiated session, payment ID, condition hash, and provider context.
+3. It evaluates verified extracted claims against the exact committed condition and enforces persistent replay protection.
+4. It checks the Arc payment record is funded and its commitment matches the requested condition.
+5. It signs an attestation bound to chain ID, deployed contract address, payment ID, condition hash, provider hash, and proof identifier.
+6. The contract verifies the immutable `verificationSigner` and enforces payment state, payee authority, expiry, and proof reuse.
 
-The contract must reject every transition not explicitly permitted.
+The contract trusts the configured backend verification signer. A compromised signer key could authorize invalid releases. The signer is immutable in the deployed contract, so changing it requires a new deployment. Use a dedicated signer, keep its key server-side, and verify its on-chain address before accepting funds.
 
-## 5. Settlement authorization
+## 5. Evidence and supported scope
 
-The contract must never accept an arbitrary boolean from the backend.
+The currently implemented live-provider path is a Reclaim-backed GitHub deployment-status proof. Its exact **published provider ID and version must be supplied and validated at runtime**; placeholders or static/unbound API responses are not acceptable.
 
-A release authorization must bind:
+The gaming, freelance, commerce, and agentic examples are illustrative simulations unless a source-specific authoritative proof adapter has been implemented and validated. A successful API response, client JSON, browser boolean, or playground result is not proof. The generic GitHub/HTTP provider classes fail closed until a real verifier path is configured.
 
-- payment id
-- condition hash
-- proof identifier
-- verification result
-- expiry
-- replay protection
+## 6. Secrets and runtime configuration
 
-The exact authorization mechanism will be finalized after the Reclaim proof structure is pinned. Preferred direction is direct on-chain proof verification where practical, with Settleva contract logic checking the verified claims against the committed condition.
+- Never expose provider secrets, database credentials, deployment keys, or the verifier private key in the browser, public variables, repository, logs, or chat.
+- Keep `SETTLEVA_VERIFIER_PRIVATE_KEY` server-side. The constructor's `verificationSigner` must equal the address derived from this private key.
+- Use Arc mainnet chain ID `5042`, the Arc mainnet RPC, and the exact deployed contract address consistently in server and frontend configuration.
+- Replay/session protection must use persistent database storage with atomic conflict handling.
+- Backend configuration, RPC, database, provider, or on-chain-state errors fail closed: no settlement attestation is issued.
+- SDK packages remain workspace/private until external package publication and dependency packaging are deliberately completed.
 
-## 6. Evidence
+## 7. Locked UI and playground behavior
 
-Evidence contains:
+The landing page and visual system are locked. Do not alter `apps/web/app/page.tsx`, `apps/web/app/globals.css`, or `apps/web/app/layout.tsx` without explicit approval.
 
-- provider identifier
-- proof identifier
-- condition hash/context binding
-- verified claims
-- provider proof payload/reference
+The playground must use the shared condition canonicalizer and evaluator, allow guided and developer modes, and clearly label all results as simulated. It must not deploy contracts, claim cryptographic proof verification, connect a wallet, or imply that USDC moved.
 
-A normal GitHub API response is evidence input, not cryptographic proof.
+## 8. Mainnet release gate
 
-Reclaim's Solidity integration supports EVM contracts that call its verifier and lets application logic inspect proof context. This makes a self-deployed verifier integration technically viable, but the exact Arc deployment and package/version must be verified before implementation.
+A green CI run is code/test evidence, not a production deployment. Before accepting real funds, all of the following must be true:
 
-## 7. Trust boundaries
+1. The shared contract is deployed to Arc mainnet and its bytecode and immutable signer are checked.
+2. The production backend/database and website are deployed with the exact server-side configuration.
+3. A real published Reclaim provider ID/version is resolved by the SDK and matches server and client configuration.
+4. The repository's mainnet preflight command passes against the actual Arc RPC, USDC contract, Settleva contract, verifier key, Reclaim configuration, and database.
+5. A controlled low-value real payment completes funding -> real Reclaim proof -> backend verification/attestation -> payee release, with the final transaction and state confirmed on Arc.
+6. A nonqualifying/invalid proof does not release funds, and expiry/refund behavior is verified before general launch.
 
-Trusted:
-
-- deployed Settleva contract code
-- cryptographic verifier rules
-- committed condition hash
-- Arc consensus
-- configured provider/verifier keys according to provider protocol
-
-Not trusted:
-
-- frontend
-- payer-supplied evidence
-- recipient-supplied evidence
-- arbitrary backend boolean
-- arbitrary URLs
-- mutable condition data after funding
-
-## 8. Replay and duplicate protection
-
-Each payment has a unique id.
-
-The contract must track settlement and refund completion. A proof identifier must not be reusable for another settlement of the same payment. Expiry and settlement operations must be mutually exclusive.
-
-## 9. Expiry
-
-After expiry, no proof may settle the payment. A refund operation moves the payment to REFUNDED exactly once.
-
-## 10. Next implementation gate
-
-Before Settleva.sol:
-
-1. Pin the Reclaim Solidity SDK version.
-2. Confirm its proof struct and verifier interface.
-3. Confirm Arc testnet RPC/chain configuration.
-4. Deploy and verify a minimal Reclaim verifier integration on Arc testnet.
-5. Produce one real proof verification transaction.
-6. Only then bind Settleva settlement authorization to the verified result.
-
-## Research basis
-
-Reclaim's current Solidity documentation says its verifier can be integrated into an EVM smart contract, with business logic executed after verifyProof succeeds. It also documents using proof context for application-specific checks.
-
-Source: https://docs.reclaimprotocol.org/onchain/solidity/quickstart
+Do not represent simulations, CI's “Record production deployment evidence” job, or a Vercel CI status as proof that the contract or backend has been deployed or that settlement is live.
