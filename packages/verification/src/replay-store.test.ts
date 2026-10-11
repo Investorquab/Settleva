@@ -9,10 +9,10 @@ const binding = {
   conditionHash: "0xcondition1"
 };
 
-test("accepts a session/proof pair once", async () => {
+test("accepts a session/proof pair and makes the exact retry idempotent", async () => {
   const store = new InMemoryReplayStore();
   assert.equal(await store.claim(binding), true);
-  assert.equal(await store.claim(binding), false);
+  assert.equal(await store.claim(binding), true);
 });
 
 test("rejects a reused session even with a different proof", async () => {
@@ -31,11 +31,7 @@ test("rejects a reused session or proof when payment or condition changes", asyn
   const store = new InMemoryReplayStore();
   assert.equal(await store.claim(binding), true);
   assert.equal(
-    await store.claim({
-      ...binding,
-      paymentId: "0xpayment2",
-      conditionHash: "0xcondition2"
-    }),
+    await store.claim({...binding, paymentId:"0xpayment2", conditionHash:"0xcondition2"}),
     false
   );
 });
@@ -46,44 +42,32 @@ test("allows independent session/proof pairs for different payments", async () =
   assert.equal(
     await store.claim({
       ...binding,
-      sessionId: "session-2",
-      proofIdentifier: "0xproof2",
-      paymentId: "0xpayment2"
+      sessionId:"session-2",
+      proofIdentifier:"0xproof2",
+      paymentId:"0xpayment2"
     }),
     true
   );
 });
 
-test("concurrent identical attempts accept only one binding", async () => {
+test("concurrent identical attempts preserve one idempotent binding", async () => {
   const store = new InMemoryReplayStore();
-  const results = await Promise.all(
-    Array.from({length: 64}, () => store.claim(binding))
-  );
+  const results = await Promise.all(Array.from({length:64}, () => store.claim(binding)));
+  assert.equal(results.every(Boolean), true);
+});
+
+test("concurrent conflicting attempts sharing a session accept one owner", async () => {
+  const store = new InMemoryReplayStore();
+  const results = await Promise.all(Array.from({length:32}, (_, index) =>
+    store.claim({...binding, proofIdentifier:`0xproof-${index}`})
+  ));
   assert.equal(results.filter(Boolean).length, 1);
 });
 
-test("concurrent conflicting attempts sharing a session accept only one binding", async () => {
+test("concurrent conflicting attempts sharing a proof accept one owner", async () => {
   const store = new InMemoryReplayStore();
-  const results = await Promise.all(
-    Array.from({length: 32}, (_, index) =>
-      store.claim({
-        ...binding,
-        proofIdentifier: `0xproof-${index}`
-      })
-    )
-  );
-  assert.equal(results.filter(Boolean).length, 1);
-});
-
-test("concurrent conflicting attempts sharing a proof accept only one binding", async () => {
-  const store = new InMemoryReplayStore();
-  const results = await Promise.all(
-    Array.from({length: 32}, (_, index) =>
-      store.claim({
-        ...binding,
-        sessionId: `session-${index}`
-      })
-    )
-  );
+  const results = await Promise.all(Array.from({length:32}, (_, index) =>
+    store.claim({...binding, sessionId:`session-${index}`})
+  ));
   assert.equal(results.filter(Boolean).length, 1);
 });

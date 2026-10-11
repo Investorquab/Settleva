@@ -1,5 +1,6 @@
 import { keccak256, stringToHex } from "viem";
 import { canonicalizeCondition, type PaymentCondition } from "@settleva/conditions";
+import { normalizeTokenAmount } from "./amount.js";
 
 export interface PaymentIdInput {
   readonly payer: string;
@@ -10,12 +11,13 @@ export interface PaymentIdInput {
   readonly condition: PaymentCondition;
 }
 
+/** Derive a stable payment ID from normalized payment terms and canonical policy. */
 export function derivePaymentId(input: PaymentIdInput): `0x${string}` {
   const payload = JSON.stringify({
     payer: input.payer.toLowerCase(),
     payee: input.payee.toLowerCase(),
     token: input.token.toLowerCase(),
-    amount: input.amount,
+    amount: normalizeTokenAmount(input.amount),
     expiry: input.expiry,
     condition: canonicalizeCondition(input.condition)
   });

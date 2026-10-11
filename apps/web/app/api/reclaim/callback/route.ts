@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         return NextResponse.json({received:true,verified:true,sessionId});
       } catch (error) {
         const message = error instanceof Error ? error.message : "Reclaim verification failed.";
-        const retryable = error instanceof ReclaimVerificationError && (error.code === "DATABASE" || error.code === "REPLAY");
+        const retryable = error instanceof ReclaimVerificationError && (error.code === "DATABASE" || error.code === "REPLAY" || error.code === "CHAIN");
         const currentStatus = (await sessions.get(sessionId))?.status ?? null;
         const failureStatus = resolveCallbackFailure(retryable, currentStatus);
         if (failureStatus === "already-verified") {

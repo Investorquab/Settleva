@@ -2,7 +2,14 @@ import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
+import type { Hex } from "viem";
 import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
+import {
+  assertFundedPaymentOnchain,
+  SettlementChainConfigurationError,
+  SettlementChainRpcError,
+  SettlementPaymentStateError
+} from "../../../../lib/settlement-chain.js";
 
 export const runtime = "nodejs";
 
@@ -49,7 +56,15 @@ export async function POST(request: Request) {
     if (!isPaymentCondition(body.condition)) return NextResponse.json({error:"The exact payment condition is required."},{status:400});
 
     const condition = body.condition;
-    if (hashCondition(condition) !== context.conditionHash) return NextResponse.json({error:"Payment condition does not match its committed hash."},{status:400});
+    let computedConditionHash: Hex;
+    try {
+      computedConditionHash = hashCondition(condition);
+    } catch (error) {
+      return NextResponse.json({error:error instanceof Error ? error.message : "Payment condition is invalid."},{status:400});
+    }
+    if (computedConditionHash.toLowerCase() !== context.conditionHash.toLowerCase()) {
+      return NextResponse.json({error:"Payment condition does not match its committed hash."},{status:400});
+    }
 
     const appId = process.env.RECLAIM_APP_ID;
     const appSecret = process.env.RECLAIM_APP_SECRET;
@@ -60,6 +75,10 @@ export async function POST(request: Request) {
     }
     if (condition.provider !== providerId) return NextResponse.json({error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
     if (condition.providerVersion !== configuredProviderVersion) return NextResponse.json({error:"Payment condition provider version does not match the configured Reclaim provider version."},{status:400});
+
+    // Do not start a provider session for a made-up payment ID or a condition
+    // that is not the exact commitment locked by the live Arc contract.
+    await assertFundedPaymentOnchain(context.paymentId as Hex, condition, context.conditionHash);
 
     const requestConfig = await ReclaimProofRequest.init(appId,appSecret,providerId,{log:false});
     const {providerId:resolvedProviderId,providerVersion} = requestConfig.getProviderVersion();
@@ -103,6 +122,9 @@ export async function POST(request: Request) {
       providerVersion
     });
   } catch (error) {
-    return NextResponse.json({error:error instanceof Error ? error.message:"Could not create Reclaim request."},{status:500});
+    const status = error instanceof SettlementChainConfigurationError || error instanceof SettlementChainRpcError
+      ? 503
+      : error instanceof SettlementPaymentStateError ? 409 : 500;
+    return NextResponse.json({error:error instanceof Error ? error.message:"Could not create Reclaim request."},{status});
   }
 }

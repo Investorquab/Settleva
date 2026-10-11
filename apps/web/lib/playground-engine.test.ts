@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { prepareCreatePayment } from "@settleva/sdk";
+import { hashCondition, evaluateClaims } from "@settleva/conditions";
 import {
+  PLAYGROUND_SCENARIOS,
   createEvidenceText,
   createPolicyText,
   evaluatePlayground,
@@ -52,4 +55,32 @@ test("malformed condition claim values produce a configuration error", () => {
   const result = evaluatePlayground(JSON.stringify(policy), createEvidenceText("gaming"), now);
   assert.equal(result.ok, false);
   if (!result.ok) assert.match(result.error, /value must be a string/);
+});
+
+test("all four playground presets use the same policy hash and evaluator as the SDK", () => {
+  const now = Math.floor(Date.now() / 1000);
+  const addresses = {
+    payer: "0x1111111111111111111111111111111111111111" as const,
+    payee: "0x2222222222222222222222222222222222222222" as const,
+    token: "0x3333333333333333333333333333333333333333" as const
+  };
+
+  for (const scenario of PLAYGROUND_SCENARIOS) {
+    const policyText = createPolicyText(scenario.id, now);
+    const evidenceText = createEvidenceText(scenario.id);
+    const result = evaluatePlayground(policyText, evidenceText, now);
+    assert.equal(result.ok, true, scenario.id + " should have a valid example policy");
+    if (!result.ok) continue;
+
+    const prepared = prepareCreatePayment({
+      ...addresses,
+      amount: "1",
+      expiry: result.policy.expiresAt,
+      condition: result.policy
+    });
+    assert.equal(prepared.conditionHash, hashCondition(result.policy), scenario.id + " SDK condition hash");
+    assert.equal(prepared.paymentId, JSON.parse(prepared.proofContext).paymentId, scenario.id + " payment context");
+    assert.deepEqual(result.failures, evaluateClaims(result.policy, result.evidence, now).failures, scenario.id + " evaluator parity");
+    assert.deepEqual(result.failures, [], scenario.id + " happy-path claims");
+  }
 });

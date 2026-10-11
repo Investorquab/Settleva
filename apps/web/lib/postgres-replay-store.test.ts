@@ -63,13 +63,38 @@ test("persistent replay store accepts only one concurrent identical claim", {ski
     }
 
     await Promise.all(stores.map((candidate) => candidate.close()));
+
+    // Regression case: if a new session row is inserted but its proof ID is
+    // already owned by another session, the transaction must roll back that
+    // new session row. Otherwise a later valid proof is permanently blocked.
+    const ownerBinding = {
+      sessionId: `${suffix}-proof-owner-session`,
+      proofIdentifier: `${suffix}-shared-proof`,
+      paymentId: `${suffix}-proof-owner-payment`,
+      conditionHash: `${suffix}-proof-owner-condition`
+    };
+    assert.equal(await store.claim(ownerBinding), true);
+
+    const conflictedBinding = {
+      sessionId: `${suffix}-contended-session`,
+      proofIdentifier: ownerBinding.proofIdentifier,
+      paymentId: `${suffix}-contended-payment`,
+      conditionHash: `${suffix}-contended-condition`
+    };
+    assert.equal(await store.claim(conflictedBinding), false);
+
+    // The failed attempt must not reserve the session ID: a correct retry can
+    // now claim that same session with a unique proof identifier.
+    assert.equal(await store.claim({
+      ...conflictedBinding,
+      proofIdentifier: `${suffix}-retry-proof`
+    }), true);
   } finally {
     await store.close();
     await sql`
       delete from settleva_reclaim_replay
-      where session_id = ${binding.sessionId}
-         or proof_identifier = ${binding.proofIdentifier}
-         or proof_identifier = ${suffix + "-other-proof"}
+      where session_id like ${suffix + "%"}
+         or proof_identifier like ${suffix + "%"}
     `;
     await sql.end({timeout:5});
   }

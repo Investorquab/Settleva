@@ -1,10 +1,17 @@
 {
-  "name":"@settleva/sdk",
-  "private":true,
-  "version":"0.1.0",
-  "type":"module",
-  "main":"dist/index.js",
-  "types":"dist/index.d.ts",
-  "scripts":{"check":"tsc --noEmit --rootDir ../..","test":"tsc --noEmit --rootDir ../..","build":"tsc -p tsconfig.build.json"},
-  "dependencies":{"@settleva/conditions":"workspace:*","viem":"^2.37.0"}
+  "name": "@settleva/sdk",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "check": "tsc --noEmit --rootDir ../..",
+    "test": "pnpm build && node --test dist/*.test.js tests/sdk.integration.test.mjs",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@settleva/conditions": "workspace:*",
+    "viem": "^2.37.0"
+  }
 }

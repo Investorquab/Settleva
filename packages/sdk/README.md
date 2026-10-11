@@ -1,25 +1,31 @@
 # @settleva/sdk
 
-The SDK prepares deterministic payment commitments. It does not custody funds, prove external events or decide whether provider evidence is valid.
+The SDK prepares deterministic payment commitments and builds viem-compatible transaction calls for the shared Settleva contract. It does not custody funds, prove external events, or decide whether provider evidence is valid.
+
+> Current distribution status: this package is private to the Settleva monorepo. It is not yet published as an independently installable npm package.
 
 ## Prepare a conditional payment
 
+The payment expiry and policy expiry must be identical. Amounts are normalized before deriving the payment ID, so equivalent values such as `"01.5000"` and `"1.5"` produce the same amount representation.
+
 ```ts
-import { prepareCreatePayment } from "@settleva/sdk";
+import {
+  buildApprovalCall,
+  buildCreatePaymentCall,
+  prepareCreatePayment,
+  toTokenUnits
+} from "@settleva/sdk";
 import type { PaymentCondition } from "@settleva/conditions";
 
+const expiresAt = Math.floor(Date.now() / 1000) + 86_400;
 const condition: PaymentCondition = {
   version: "1.0",
   provider: "your-evidence-provider",
   providerVersion: "1",
   claims: [
-    {
-      field: "milestone.status",
-      operator: "equals",
-      value: "accepted"
-    }
+    { field: "milestone.status", operator: "equals", value: "accepted" }
   ],
-  expiresAt: Math.floor(Date.now() / 1000) + 86_400
+  expiresAt
 };
 
 const prepared = prepareCreatePayment({
@@ -27,23 +33,37 @@ const prepared = prepareCreatePayment({
   payee,
   token,
   amount: "25",
-  expiry: condition.expiresAt,
+  expiry: expiresAt,
   condition
 });
 
-// Use the prepared identifiers in the application's wallet transaction.
-console.log(prepared.paymentId);
-console.log(prepared.conditionHash);
-console.log(prepared.providerHash);
+// This does not send a transaction. Your wallet client asks the user to approve it.
+const approvalCall = buildApprovalCall(prepared, settlevaAddress, 6);
+await walletClient.writeContract({ account, ...approvalCall });
+
+const fundingCall = buildCreatePaymentCall(prepared, settlevaAddress, 6);
+await walletClient.writeContract({ account, ...fundingCall });
 ```
 
-The amount is a human-readable decimal string. Convert it to the token's atomic units when constructing the contract transaction (Arc USDC uses six decimals).
+`buildApprovalCall` and `buildCreatePaymentCall` return typed viem call objects; the host application retains wallet control and must wait for transaction receipts. The example assumes ERC-20 token decimals are known. For Arc USDC, use 6 decimals, and confirm the token address before funding.
 
-## Responsibilities remain separated
+## Commitment invariants
 
-- The SDK creates deterministic identifiers and the exact condition commitment.
-- A configured server-side provider integration verifies event evidence.
-- The backend binds verification to payment/condition context and enforces replay protection before producing a settlement attestation.
-- The shared Settleva contract enforces payment state and attestation authorization.
+- The payment ID includes payer, payee, token, normalized human-readable amount, expiry and canonical policy.
+- The condition hash is the Keccak-256 digest of deterministic canonical policy JSON.
+- The provider hash is Keccak-256 of the provider ID; the policy hash also commits to the pinned provider version.
+- The proof context binds the payment ID and condition hash.
+- `toTokenUnits(amount, decimals)` validates supported decimal precision before a transaction is built.
+- Payment expiry must exactly match `condition.expiresAt`, and it must still be in the future.
+- Empty policies, duplicate claim fields, malformed claims and unsupported operators are rejected before a commitment is prepared.
 
-The current public condition schema supports the `equals` operator only. The website playground intentionally uses that same schema and evaluator. Demo evidence is illustrative and cannot authorize settlement.
+## Responsibility boundaries
+
+- **SDK:** validates payment inputs, canonicalizes policy, derives deterministic identifiers and builds transaction calls.
+- **Evidence provider:** obtains an authoritative signal for the use case. A successful API response is not automatically a cryptographic proof.
+- **Backend:** verifies the configured provider proof/version, binds the result to the funded on-chain payment and condition, evaluates verified claims, enforces persistent replay protection, and signs the settlement attestation.
+- **Contract:** holds the specified ERC-20 amount and enforces payment state, expiry, payee-only release, attestation authorization, proof replay rejection and eligible payer refunds.
+
+The current production verification adapter supports the configured Reclaim provider and its GitHub deployment-status claims. Gaming, freelance, commerce and agent examples in the website playground are simulations until corresponding authoritative evidence adapters are implemented and validated.
+
+The current policy language supports the `equals` operator only. A passing playground result is not external proof, does not create an attestation, and does not transfer USDC.

@@ -1,10 +1,17 @@
 {
-  "name":"@settleva/providers",
-  "private":true,
-  "version":"0.1.0",
-  "type":"module",
-  "main":"dist/index.js",
-  "types":"dist/index.d.ts",
-  "scripts":{"check":"tsc --noEmit --rootDir ../..","test":"tsc --noEmit --rootDir ../..","build":"tsc -p tsconfig.build.json"},
-  "dependencies":{"@settleva/conditions":"workspace:*","@settleva/verification":"workspace:*"}
+  "name": "@settleva/providers",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "check": "tsc --noEmit --rootDir ../..",
+    "test": "pnpm build && node --test dist/*.test.js",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@settleva/conditions": "workspace:*",
+    "@settleva/verification": "workspace:*"
+  }
 }

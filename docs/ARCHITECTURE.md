@@ -2,41 +2,52 @@
 
 ## Core invariant
 
-A payment may settle only when the evidence satisfies the exact condition committed when that payment was funded, the backend's verification rules pass, and the contract accepts the payment-bound settlement attestation.
+A payment may settle only when evidence satisfies the exact condition committed when the payment was funded, the backend's verification rules pass, and the contract accepts a payment-bound settlement attestation.
 
 ## Components
 
 1. **Application:** owns product-specific UI, identity and business workflow.
-2. **SDK:** validates payment inputs and deterministically prepares the payment ID, condition hash, provider hash and proof context.
-3. **Condition engine:** canonicalizes versioned policy data and evaluates verified claims deterministically. The initial operator set is intentionally limited to exact equality.
-4. **Evidence provider:** obtains claims from a source authoritative for that use case. A successful API response is not automatically a cryptographic proof.
-5. **Verification backend:** verifies provider/version and proof data, binds verified context to the payment and condition, enforces persistent replay protection, and signs a settlement attestation.
-6. **Settleva contract on Arc:** a shared contract records each payment, locks the specified ERC-20 token, verifies signed release authorization, enforces expiry/refund rules, and prevents proof replay.
+2. **SDK:** validates payment inputs, canonicalizes a policy, prepares payment ID/condition hash/provider hash/proof context, converts amounts to atomic units, and builds viem-compatible contract calls.
+3. **Condition engine:** canonicalizes versioned policies and evaluates verified claims deterministically. The initial operator set is intentionally limited to exact equality.
+4. **Evidence provider:** obtains claims from a source authoritative for the use case. A successful API response is not automatically cryptographic proof.
+5. **Verification backend:** verifies provider/version and proof data, binds claims to the initiated session and committed context, enforces persistent replay protection, checks the live Arc payment record and signs a settlement attestation.
+6. **Settleva contract on Arc:** one shared contract records each payment, locks the specified ERC-20 token, verifies signed release authorization, enforces expiry/refund rules and prevents proof replay.
 
 ## Flow
 
-Application -> SDK prepares immutable condition/payment commitment -> contract locks USDC -> evidence provider returns proof -> backend verifies proof and condition -> backend signs a payment-bound attestation -> payee submits release -> contract validates the attestation and payment state.
+Application -> SDK prepares immutable payment/policy commitment -> contract locks USDC -> evidence provider returns proof -> backend verifies provider/session/context/claims -> backend confirms the on-chain payment is Funded and its condition hash, provider hash and expiry match -> backend signs a payment-bound attestation -> payee submits release -> contract validates the attestation and payment state.
 
-The web playground is separate from the production settlement path. It uses the repository's actual condition canonicalizer and evaluator on example inputs. It is not a proof verifier and does not submit transactions.
+The backend repeats the on-chain payment check at proof request time and immediately before issuing an attestation. Missing configuration, unavailable RPC, an unknown payment, non-Funded state, an expired payment or mismatch between stored and submitted condition/provider/expiry fails closed. The contract remains the final authority for release/refund state.
 
 ## Shared contract and use cases
 
-Gaming, freelance milestone, conditional commerce and agentic task payments use the same Settleva contract. Each payment has its own ID, token, amount, expiry, condition hash and provider hash. Different use cases require different trusted evidence adapters and policies, not one contract deployment apiece. USDC itself is an existing token contract and is not deployed by Settleva.
+Gaming, freelance milestone, conditional commerce and agentic task payments use the same Settleva contract. Each payment has its own ID, token, amount, expiry, condition hash and provider hash. Different use cases need their own trusted evidence adapters and policies—not a separate contract deployment. USDC is an existing token contract and is not deployed by Settleva.
+
+The currently configured production verifier is for GitHub deployment-status evidence. The other scenario presets in the playground are simulations until corresponding authoritative evidence adapters are implemented.
+
+## Policy and SDK invariants
+
+- A condition must have version `1.0`, a non-empty provider and provider version, a future expiry, and at least one well-formed claim.
+- Claim fields must be unique; the current operator is `equals`.
+- The payment expiry equals `condition.expiresAt`.
+- Human-readable token amounts are normalized before payment ID derivation; conversion to atomic units validates token decimals.
+- Canonical condition hashes and proof contexts are deterministic.
+- Transaction-call helpers only prepare typed viem arguments; the host app's wallet still signs/submits transactions.
 
 ## Trust boundaries
 
 - Frontend input is untrusted and has no settlement authority.
-- Payer/payee-submitted JSON does not establish that a real-world event occurred.
-- Provider identity/version, verified claims and context must match the committed payment and condition.
-- Replay/session mappings require persistent storage and atomic conflict handling.
-- Signing credentials and provider credentials remain server-side.
-- The current settlement contract trusts the configured backend verification signer. It does not directly verify a Reclaim proof on-chain.
+- Payer/payee-submitted JSON does not prove a real-world event occurred.
+- The provider identity/version, verified claims, session binding and context must match the commitment.
+- Replay/session bindings use persistent storage and atomic conflict handling; partial replay claims must roll back.
+- Provider credentials and signing keys remain server-side.
+- The current contract trusts its configured backend verification signer. It does not directly verify a Reclaim proof on-chain.
 - Refund eligibility is determined by contract state and expiry, not by the website's simulated state.
 
 ## Developer experience
 
-The public landing page explains the flow and use cases. Use-case cards open detail modals that can preselect a scenario in the policy playground. The playground supports guided mode and editable JSON policy/evidence inputs. It shows parse/schema/evaluation failures and never claims to have moved real funds.
+The public landing page explains the flow and four use cases. Each use-case card opens a detail modal and can preselect the corresponding playground example. The playground has guided mode and editable JSON policy/evidence. It uses the shared condition canonicalizer and evaluator and cannot create proofs or transactions.
 
-## Production readiness boundaries
+## Production readiness
 
-A successful policy simulation is not sufficient for production. Mainnet release requires a reviewed contract, a verified signer configuration, a deployed and secured backend, a working authoritative provider, database/replay protection, and a tested end-to-end transaction against the deployed contract.
+Production settlement requires a reviewed contract, a verified signer configuration, a deployed backend/database, configured Arc mainnet RPC and contract address, a working authoritative evidence adapter, persistent replay protection, and a controlled low-value end-to-end test. A green CI run validates code and test assertions; it does not alone prove mainnet configuration or live provider behavior.

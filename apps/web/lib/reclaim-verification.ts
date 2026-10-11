@@ -17,6 +17,12 @@ import {
   assertVerifiedProofDataBinding
 } from "./reclaim-decision.js";
 import { privateKeyToAccount } from "viem/accounts";
+import {
+  assertFundedPaymentOnchain,
+  SettlementChainConfigurationError,
+  SettlementChainRpcError,
+  SettlementPaymentStateError
+} from "./settlement-chain.js";
 
 export interface ReclaimVerificationInput {
   readonly proofs: unknown[];
@@ -29,9 +35,9 @@ export interface ReclaimVerificationInput {
 }
 
 export class ReclaimVerificationError extends Error {
-  readonly code: "INVALID" | "REPLAY" | "DATABASE";
+  readonly code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN";
 
-  constructor(code: "INVALID" | "REPLAY" | "DATABASE", message: string) {
+  constructor(code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN", message: string) {
     super(message);
     this.name = "ReclaimVerificationError";
     this.code = code;
@@ -73,6 +79,23 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const verifyingContract: Address = getAddress(configuredContract);
 
   assertProviderPin(input.condition,input.expectedProviderId,input.expectedProviderVersion);
+
+  try {
+    await assertFundedPaymentOnchain(
+      input.expectedPaymentId as Hex,
+      input.condition,
+      input.expectedConditionHash
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not validate the Arc payment commitment.";
+    if (error instanceof SettlementChainConfigurationError || error instanceof SettlementChainRpcError) {
+      throw new ReclaimVerificationError("CHAIN", message);
+    }
+    if (error instanceof SettlementPaymentStateError) {
+      throw new ReclaimVerificationError("INVALID", message);
+    }
+    throw error;
+  }
 
   const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{log:false});
   const {providerId,providerVersion} = requestConfig.getProviderVersion();

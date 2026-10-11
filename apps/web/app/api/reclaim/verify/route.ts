@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Proof verification failed.";
     const status =
       error instanceof ReclaimVerificationError && error.code === "REPLAY" ? 409 :
-      error instanceof ReclaimVerificationError && error.code === "DATABASE" ? 503 :
+      error instanceof ReclaimVerificationError && (error.code === "DATABASE" || error.code === "CHAIN") ? 503 :
       message.includes("database") ? 503 : 400;
     return NextResponse.json({verified:false,error:message},{status});
   }
