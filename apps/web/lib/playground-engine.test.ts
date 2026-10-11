@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { prepareCreatePayment } from "@settleva/sdk";
+import { ARC_USDC_ADDRESS, prepareCreatePayment } from "@settleva/sdk";
 import { hashCondition, evaluateClaims } from "@settleva/conditions";
 import {
   PLAYGROUND_SCENARIOS,
@@ -62,7 +62,7 @@ test("all four playground presets use the same policy hash and evaluator as the 
   const addresses = {
     payer: "0x1111111111111111111111111111111111111111" as const,
     payee: "0x2222222222222222222222222222222222222222" as const,
-    token: "0x3333333333333333333333333333333333333333" as const
+    token: ARC_USDC_ADDRESS
   };
 
   for (const scenario of PLAYGROUND_SCENARIOS) {
