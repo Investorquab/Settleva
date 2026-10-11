@@ -64,8 +64,9 @@ test("backend refuses to attest if payment expiry differs from policy expiry", (
 });
 
 test("backend refuses expired on-chain payments", () => {
+  const expiredCondition = { ...condition, expiresAt: now };
   assert.throws(
-    () => assertFundedPaymentSnapshot(snapshot({expiry: BigInt(now)}), condition, conditionHash, now),
+    () => assertFundedPaymentSnapshot(snapshot({expiry: BigInt(now)}), expiredCondition, conditionHash, now),
     (error: unknown) => error instanceof SettlementPaymentStateError && error.code === "PAYMENT_EXPIRED"
   );
 });
