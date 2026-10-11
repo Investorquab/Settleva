@@ -17,6 +17,13 @@ export const ERC20_APPROVAL_ABI = [
 export const SETTLEVA_ABI = [
   {
     type: "function",
+    name: "verificationSigner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
     name: "ARC_USDC",
     stateMutability: "view",
     inputs: [],

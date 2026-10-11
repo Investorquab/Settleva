@@ -232,7 +232,32 @@ export default function LiveSettlementConsole() {
         condition
       });
 
-      setMessage("Approve the exact USDC amount in your wallet…");
+      // This server-side check is read-only and must pass before either wallet transaction.
+      setMessage("Checking the live Arc contract, immutable signer, Reclaim provider, and replay database before requesting any transaction…");
+      const readinessResponse = await fetch("/api/reclaim/readiness", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        cache: "no-store",
+        body: JSON.stringify({condition, proofContext: prepared.proofContext})
+      });
+      let readiness: {ready?: boolean;error?: string;chainId?: number;asset?: string;contractAddress?: string};
+      try {
+        readiness = await readinessResponse.json() as typeof readiness;
+      } catch {
+        throw new Error("The server readiness endpoint returned an unreadable response. No USDC transaction was requested.");
+      }
+      if (!readinessResponse.ok || readiness.ready !== true) {
+        throw new Error(readiness.error || "Live settlement readiness failed. No USDC transaction was requested.");
+      }
+      if (
+        readiness.chainId !== ARC_MAINNET_CHAIN_ID
+        || readiness.asset?.toLowerCase() !== ARC_USDC_ADDRESS.toLowerCase()
+        || readiness.contractAddress?.toLowerCase() !== targetContract.toLowerCase()
+      ) {
+        throw new Error("Server and browser readiness checks disagree about the Arc chain, asset, or contract. No USDC transaction was requested.");
+      }
+
+      setMessage("Readiness confirmed. Approve the exact USDC amount in your wallet…");
       const approvalCall = buildApprovalCall(prepared, targetContract, ARC_USDC_DECIMALS);
       const approvalTx = await wallet.writeContract({...approvalCall, account});
       const approvalReceipt = await publicClient.waitForTransactionReceipt({hash: approvalTx});

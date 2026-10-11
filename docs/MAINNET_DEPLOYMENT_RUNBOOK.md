@@ -138,6 +138,10 @@ The preflight is read-only against Arc and Reclaim and performs a harmless `SELE
 
 Do not launch if any check fails. This preflight validates configuration and infrastructure; it cannot substitute for a real proof or real token transfer.
 
+## Pre-funding readiness gate
+
+The live console calls `POST /api/reclaim/readiness` before asking for either an ERC-20 approval or funding transaction. It validates the exact condition and payment commitment, Reclaim provider resolution/params, live contract bytecode, immutable signer, Arc USDC address/decimals, callback and PostgreSQL session/replay schema. A failed readiness check prevents wallet transactions. This does not replace manual `preflight:mainnet` or the real proof-to-release acceptance test.
+
 ## 7. Controlled real-funds acceptance test
 
 Only after the preceding gates pass:

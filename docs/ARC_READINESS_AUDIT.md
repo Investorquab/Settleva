@@ -62,7 +62,7 @@ A separate `/live` route was added as a functional interaction path. When the co
 
 It displays links for the transaction receipts. It is **not considered live** until tested after deployment with a real proof and confirmed mainnet release. No provider, secrets, contract address or successful transaction is fabricated in code.
 
-The database migration `pnpm --filter @settleva/web db:migrate` creates/reconciles the session/replay tables and partial unique indexes. CI runs it against a real PostgreSQL service. Production preflight now checks required table/column/index presence as well as basic connectivity.
+The database migration `pnpm --filter @settleva/web db:migrate` creates/reconciles the session/replay tables and partial unique indexes. CI runs it against a real PostgreSQL service. Production preflight checks required table/column/index presence as well as basic connectivity. Before either approval or funding transaction is requested, the live route calls `POST /api/reclaim/readiness`, which validates the committed condition/provider parameters, live Arc contract bytecode, Arc USDC decimals/allowlist, immutable signer, Reclaim app credentials/provider pin, HTTPS callback and replay schema. A failed readiness check prevents wallet transactions.
 
 ## Official Arc Microgrants requirements
 
