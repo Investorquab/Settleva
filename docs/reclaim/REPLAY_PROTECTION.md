@@ -62,3 +62,14 @@ Before production verification is enabled:
 4. Run the persistent replay race test against the actual managed Postgres instance.
 5. Confirm database failure produces no verification attestation.
 6. Confirm conflicting reuse of a session or proof identifier fails closed, while an exact retry of the same binding is idempotent.
+
+
+## Callback terminal-state rule
+
+A public callback may identify its initiated session from proof context, but that identifier is not an authorization credential. A callback submission is not allowed to mark a session failed merely because parsing, SDK verification, context binding, chain RPC, persistence, or provider work throws an error. Only a proof that has passed Reclaim cryptographic verification and TEE verification, matches the initiated session/payment/condition, and contains verified claims that fail the committed condition may produce the terminal condition-failure state. The database transition is conditional on the session still being `pending`, so it cannot overwrite a concurrent successful verification.
+
+Provider/SDK and infrastructure failures remain retryable. Exact retry is intentional and protected by the database idempotency rules above. Public endpoints return classified, sanitized messages rather than SDK/database exception text.
+
+## Public endpoint deployment controls
+
+The callback accepts a bounded proof body (1 MiB); the request and readiness endpoints accept at most 64 KiB; the status endpoint accepts at most 16 KiB. These are application-level limits and apply to streamed bodies even when Content-Length is absent. Configure distributed rate limits and concurrency caps at the deployed trusted edge/WAF before exposing the routes. Do not derive security identity from a forwarded-IP header unless the proxy overwrites or authenticates it.

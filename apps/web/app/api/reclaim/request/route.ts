@@ -4,6 +4,7 @@ import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
 import type { Hex } from "viem";
 import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
+import { JsonRequestBodyError, readJsonRequestBody } from "../../../../lib/request-body.js";
 import { buildReclaimProviderParams } from "../../../../lib/reclaim-binding.js";
 import { isGitHubDeploymentCondition } from "@settleva/providers";
 import {
@@ -53,7 +54,7 @@ function isProofContext(value: unknown): value is {paymentId:string;conditionHas
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as {context?: unknown;condition?: unknown};
+    const body = await readJsonRequestBody<{context?: unknown;condition?: unknown}>(request, 64 * 1024);
     if (typeof body.context !== "string") return privateJson({error:"A payment-bound proof context is required."},{status:400});
 
     let context: {paymentId:string;conditionHash:`0x${string}`};
@@ -144,9 +145,15 @@ export async function POST(request: Request) {
       providerVersion
     });
   } catch (error) {
+    if (error instanceof JsonRequestBodyError) return privateJson({error:error.message},{status:error.status});
     const status = error instanceof SettlementChainConfigurationError || error instanceof SettlementChainRpcError
       ? 503
-      : error instanceof SettlementPaymentStateError ? 409 : 500;
-    return privateJson({error:error instanceof Error ? error.message:"Could not create Reclaim request."},{status});
+      : error instanceof SettlementPaymentStateError ? 409 : 503;
+    const message = error instanceof SettlementPaymentStateError
+      ? "The on-chain payment is not eligible for Reclaim verification."
+      : error instanceof SettlementChainConfigurationError || error instanceof SettlementChainRpcError
+        ? "Arc payment validation is temporarily unavailable. Try again later."
+        : "Could not create the Reclaim request. Check server readiness and retry.";
+    return privateJson({error:message},{status});
   }
 }

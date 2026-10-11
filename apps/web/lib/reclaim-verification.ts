@@ -7,7 +7,6 @@ import { getAddress, isAddress, keccak256, stringToHex, type Address, type Hex }
 import { extractedParametersToClaims } from "./reclaim-binding.js";
 import {
   assertConditionCommitment,
-  assertConditionEvaluation,
   assertGitHubDeploymentEvidence,
   assertProofFreshness,
   assertProofIdentifier,
@@ -36,9 +35,9 @@ export interface ReclaimVerificationInput {
 }
 
 export class ReclaimVerificationError extends Error {
-  readonly code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN";
+  readonly code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN" | "PROVIDER" | "CONDITION_FAILED";
 
-  constructor(code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN", message: string) {
+  constructor(code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN" | "PROVIDER" | "CONDITION_FAILED", message: string) {
     super(message);
     this.name = "ReclaimVerificationError";
     this.code = code;
@@ -98,24 +97,39 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
     if (error instanceof SettlementPaymentStateError) {
       throw new ReclaimVerificationError("INVALID", message);
     }
-    throw error;
+    throw new ReclaimVerificationError("CHAIN", "Could not validate the current Arc payment state.");
   }
 
-  const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{
-    log:false,
-    providerVersion:input.expectedProviderVersion,
-    useBrowserExtension:false
-  });
-  const {providerId,providerVersion} = requestConfig.getProviderVersion();
-  assertResolvedProviderPin(providerId,providerVersion,input.expectedProviderId,input.expectedProviderVersion);
+  let providerId: string;
+  let providerVersion: string;
+  try {
+    const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{
+      log:false,
+      providerVersion:input.expectedProviderVersion,
+      useBrowserExtension:false
+    });
+    const resolved = requestConfig.getProviderVersion();
+    providerId = resolved.providerId;
+    providerVersion = resolved.providerVersion;
+    assertResolvedProviderPin(providerId,providerVersion,input.expectedProviderId,input.expectedProviderVersion);
+  } catch {
+    throw new ReclaimVerificationError("PROVIDER", "Reclaim could not resolve the exact configured provider version.");
+  }
 
-  const result = await verifyProof(
-    input.proofs as Parameters<typeof verifyProof>[0],
-    {providerId,providerVersion,teeAttestation:{appSecret}}
-  );
-  if (!result.isVerified) throw new Error(result.error?.message || "Reclaim rejected the proof.");
+  let result: Awaited<ReturnType<typeof verifyProof>>;
+  try {
+    result = await verifyProof(
+      input.proofs as Parameters<typeof verifyProof>[0],
+      {providerId,providerVersion,teeAttestation:{appSecret}}
+    );
+  } catch {
+    throw new ReclaimVerificationError("PROVIDER", "Reclaim proof verification is temporarily unavailable.");
+  }
+  if (!result.isVerified) {
+    throw new ReclaimVerificationError("INVALID", "Reclaim did not verify the submitted proof.");
+  }
   if (result.isTeeAttestationVerified !== true) {
-    throw new Error("Reclaim application TEE attestation was not verified; no settlement attestation will be issued.");
+    throw new ReclaimVerificationError("INVALID", "The Reclaim application TEE attestation was not verified.");
   }
 
   const proof = input.proofs[0] as Record<string, unknown>;
@@ -142,7 +156,13 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   );
 
   const evaluation = evaluateClaims(input.condition,claims);
-  assertConditionEvaluation(evaluation.valid,evaluation.failures);
+  if (!evaluation.valid) {
+    // Reached only after signature/TEE verification and exact context binding.
+    throw new ReclaimVerificationError(
+      "CONDITION_FAILED",
+      "Verified evidence did not satisfy the committed payment condition."
+    );
+  }
 
   // Domain-bind the signature to the configured chain and exact deployed contract.
   // Missing or invalid deployment configuration fails closed before any signature is issued.
@@ -174,7 +194,8 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
       throw new ReclaimVerificationError("DATABASE","Replay protection database is unavailable; no verification attestation will be issued.");
     }
   } finally {
-    await replayStore.close();
+    // Do not mask an accepted replay binding because connection cleanup failed.
+    await replayStore.close().catch(() => undefined);
   }
   if (!replayAccepted) throw new ReclaimVerificationError("REPLAY","This Reclaim session or proof has already been accepted.");
 

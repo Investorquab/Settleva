@@ -12,7 +12,7 @@ export class PostgresReplayStore implements ReplayStore {
   private readonly sql: ReturnType<typeof postgres>;
 
   constructor(connectionString: string) {
-    this.sql = postgres(connectionString, { max: 1 });
+    this.sql = postgres(connectionString, { max: 1, connect_timeout: 8, idle_timeout: 1 });
   }
 
   async claim(binding: ReplayBinding): Promise<boolean> {

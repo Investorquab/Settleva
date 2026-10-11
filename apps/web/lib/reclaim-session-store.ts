@@ -20,7 +20,7 @@ export class ReclaimSessionStore {
   private readonly sql: ReturnType<typeof postgres>;
 
   constructor(connectionString: string) {
-    this.sql = postgres(connectionString, { max: 1 });
+    this.sql = postgres(connectionString, { max: 1, connect_timeout: 8, idle_timeout: 1 });
   }
 
   async create(record: Omit<ReclaimSessionRecord, "status">): Promise<boolean> {
@@ -28,7 +28,7 @@ export class ReclaimSessionStore {
       insert into settleva_reclaim_sessions
         (session_id, payment_id, condition_hash, condition, provider_id, provider_version, status_token_hash, status)
       values
-        (${record.sessionId}, ${record.paymentId}, ${record.conditionHash}, ${JSON.stringify(record.condition)}, ${record.providerId}, ${record.providerVersion}, ${record.statusTokenHash}, 'pending')
+        (${record.sessionId}, ${record.paymentId}, ${record.conditionHash}, ${this.sql.json(record.condition as unknown as Parameters<typeof this.sql.json>[0])}, ${record.providerId}, ${record.providerVersion}, ${record.statusTokenHash}, 'pending')
       on conflict (session_id) do nothing
     `;
     return result.count === 1;
@@ -64,7 +64,7 @@ export class ReclaimSessionStore {
     const result = await this.sql`
       update settleva_reclaim_sessions
       set status = 'verified',
-          proof = ${JSON.stringify(proof)},
+          proof = ${this.sql.json(proof as unknown as Parameters<typeof this.sql.json>[0])},
           proof_identifier = ${proofIdentifier},
           verification_signature = ${verificationSignature},
           error = null,

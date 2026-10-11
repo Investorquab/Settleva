@@ -89,20 +89,25 @@ test("callback commit race is idempotent only when the session is already verifi
   assert.equal(resolveVerificationCommit(false, null), "conflict");
 });
 
-test("retryable verification failures never mark a pending callback failed", () => {
-  assert.equal(shouldMarkCallbackFailed(true, "pending"), false);
-  assert.equal(shouldMarkCallbackFailed(true, "verified"), false);
-  assert.equal(shouldMarkCallbackFailed(false, "pending"), true);
+test("only a verified, bound condition mismatch may permanently fail a pending session", () => {
+  // false covers malformed/unverified proofs and all provider/infrastructure failures.
+  assert.equal(shouldMarkCallbackFailed(false, "pending"), false);
   assert.equal(shouldMarkCallbackFailed(false, "verified"), false);
   assert.equal(shouldMarkCallbackFailed(false, "failed"), false);
+  assert.equal(shouldMarkCallbackFailed(false, null), false);
+  assert.equal(shouldMarkCallbackFailed(true, "pending"), true);
+  assert.equal(shouldMarkCallbackFailed(true, "verified"), false);
+  assert.equal(shouldMarkCallbackFailed(true, "failed"), false);
+  assert.equal(shouldMarkCallbackFailed(true, null), false);
 });
 
-test("callback failure resolution never overwrites a verified session", () => {
+test("callback failure resolution preserves verified sessions and retries every nonterminal outcome", () => {
   assert.equal(resolveCallbackFailure(false, "verified"), "already-verified");
   assert.equal(resolveCallbackFailure(true, "verified"), "already-verified");
-  assert.equal(resolveCallbackFailure(true, "pending"), "retry");
-  assert.equal(resolveCallbackFailure(false, "pending"), "mark-failed");
+  assert.equal(resolveCallbackFailure(false, "pending"), "retry");
+  assert.equal(resolveCallbackFailure(true, "pending"), "mark-failed");
   assert.equal(resolveCallbackFailure(false, "failed"), "retry");
+  assert.equal(resolveCallbackFailure(true, "failed"), "retry");
   assert.equal(resolveCallbackFailure(false, null), "retry");
 });
 

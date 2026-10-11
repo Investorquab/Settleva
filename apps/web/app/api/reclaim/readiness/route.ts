@@ -18,6 +18,7 @@ import {
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
 import { buildReclaimProviderParams } from "../../../../lib/reclaim-binding.js";
 import { validateLiveReadinessEnvironment } from "../../../../lib/live-readiness.js";
+import { JsonRequestBodyError, readJsonRequestBody } from "../../../../lib/request-body.js";
 
 export const runtime = "nodejs";
 
@@ -145,7 +146,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as {condition?: unknown;proofContext?: unknown};
+    const body = await readJsonRequestBody<{condition?: unknown;proofContext?: unknown}>(request, 64 * 1024);
     const config = validateLiveReadinessEnvironment(process.env);
     const condition = checkCondition(body.condition);
     const context = parsePaymentContext(body.proofContext);
@@ -235,7 +236,13 @@ export async function POST(request: Request) {
       providerVersion:config.reclaimProviderVersion
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Live settlement readiness failed.";
+    if (error instanceof JsonRequestBodyError) {
+      return privateJson({ready:false,error:error.message},error.status);
+    }
+    const message = error instanceof Error
+      && /payment commitment|valid JSON|GitHub deployment condition|condition must be valid|must pin a provider/i.test(error.message)
+      ? error.message
+      : "Live settlement readiness could not be completed. Review server configuration and retry.";
     return privateJson({ready:false,error:message},503);
   }
 }
