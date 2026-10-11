@@ -34,7 +34,7 @@ test("unsupported operators fail validation", () => {
   policy.claims = [{ field: "delivery.status", operator: "gte", value: "1" }];
   const result = evaluatePlayground(JSON.stringify(policy), createEvidenceText("commerce"), now);
   assert.equal(result.ok, false);
-  if (!result.ok) assert.match(result.error, /Condition claim is invalid/);
+  if (!result.ok) assert.match(result.error, /unsupported operator/);
 });
 
 test("expired conditions are reported by the condition evaluator", () => {
