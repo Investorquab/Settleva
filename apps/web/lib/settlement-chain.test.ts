@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { keccak256, stringToHex } from "viem";
+import { ARC_USDC_ADDRESS } from "@settleva/sdk";
 import {
   ARC_NATIVE_CURRENCY,
-  ARC_USDC_ADDRESS,
   assertFundedPaymentSnapshot,
   SettlementPaymentStateError
 } from "./settlement-chain.ts";

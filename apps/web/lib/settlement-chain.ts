@@ -11,8 +11,6 @@ import type { PaymentCondition } from "@settleva/conditions";
 import { ARC_MAINNET_CHAIN_ID, ARC_NATIVE_CURRENCY, ARC_USDC_ADDRESS, SETTLEVA_ABI } from "@settleva/sdk";
 export { ARC_NATIVE_CURRENCY };
 
-export { ARC_NATIVE_CURRENCY } from "@settleva/sdk";
-
 export interface SettlementPaymentSnapshot {
   readonly expiry: bigint;
   readonly token: string;

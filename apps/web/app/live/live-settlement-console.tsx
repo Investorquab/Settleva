@@ -91,16 +91,16 @@ function contractAddress(): Address {
 
 async function connectArcWallet() {
   if (!window.ethereum) throw new Error("No EVM wallet was found. Install or open a wallet such as MetaMask.");
-  let wallet = createWalletClient({chain: ARC_CHAIN, transport: custom(window.ethereum as never)});
-  let chainId = await wallet.getChainId();
+  const chainClient = createWalletClient({chain: ARC_CHAIN, transport: custom(window.ethereum as never)});
+  let chainId = await chainClient.getChainId();
   if (chainId !== ARC_MAINNET_CHAIN_ID) {
     try {
-      await wallet.switchChain({id: ARC_MAINNET_CHAIN_ID});
+      await chainClient.switchChain({id: ARC_MAINNET_CHAIN_ID});
     } catch {
-      await wallet.addChain({chain: ARC_CHAIN});
-      await wallet.switchChain({id: ARC_MAINNET_CHAIN_ID});
+      await chainClient.addChain({chain: ARC_CHAIN});
+      await chainClient.switchChain({id: ARC_MAINNET_CHAIN_ID});
     }
-    chainId = await wallet.getChainId();
+    chainId = await chainClient.getChainId();
   }
   if (chainId !== ARC_MAINNET_CHAIN_ID) throw new Error("Switch your wallet to Arc mainnet (chain ID 5042).");
   const accounts = await window.ethereum.request({method: "eth_requestAccounts"});
@@ -108,7 +108,7 @@ async function connectArcWallet() {
     throw new Error("Your wallet did not return a usable EVM account.");
   }
   const account = getAddress(accounts[0]);
-  wallet = createWalletClient({account, chain: ARC_CHAIN, transport: custom(window.ethereum as never)});
+  const wallet = createWalletClient({account, chain: ARC_CHAIN, transport: custom(window.ethereum as never)});
   return {account, wallet};
 }
 
