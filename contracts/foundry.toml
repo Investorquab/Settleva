@@ -3,3 +3,8 @@ src = "src"
 test = "test"
 libs = ["lib"]
 solc_version = "0.8.24"
+
+# Arc Foundry uses this profile to apply Arc-specific execution semantics.
+# Invoke with: FOUNDRY_PROFILE=arc arc-forge test -vvv
+[profile.arc]
+network = "arc"

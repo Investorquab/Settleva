@@ -7,15 +7,17 @@ This is the single operational source of truth for taking Settleva from the curr
 - Repository branch: `main`.
 - Shared Solidity implementation: `contracts/src/Settleva.sol`.
 - Chain: Arc mainnet, ID `5042`.
-- Arc RPC: `https://rpc.mainnet.arc.io`.
-- Arc USDC: `0x3600000000000000000000000000000000000000`, six decimals.
+- RPC: `https://rpc.mainnet.arc.io`.
+- Explorer: `https://explorer.arc.io`.
+- Arc USDC ERC-20 interface: `0x3600000000000000000000000000000000000000`, six decimals.
+- Arc native USDC for gas: 18 decimals. Do not reuse ERC-20 units for native-value amounts.
 - Release authorizer: immutable `verificationSigner` set by the contract constructor.
 - Current proof scope: a real, published and pinned Reclaim GitHub deployment-status provider is required. Do not use placeholder IDs or a static/unbound proof.
 - Gaming, freelance, commerce and agentic examples remain playground simulations until source-specific evidence adapters have been implemented and validated.
 
 ## 1. Pull and validate the code locally
 
-Run from PowerShell:
+In PowerShell, run the workspace checks:
 
 ```powershell
 Set-Location C:\Users\NEW\Desktop\Settleva
@@ -24,12 +26,30 @@ pnpm install
 pnpm check
 pnpm test
 pnpm build
-Set-Location contracts
-forge test -vvv
-Set-Location ..
 ```
 
-Do not proceed if a command fails. The CI “Record production deployment evidence” job only records a deployment-type CI artifact; it does **not** deploy the website, backend or contract.
+For Solidity, use **Circle's Arc Foundry**, not the standard `foundryup` installation. Official instructions and signed/checksummed releases are at:
+
+- https://github.com/circlefin/arc-foundry
+- https://github.com/circlefin/arc-foundry/releases
+
+Arc Foundry's official README explicitly warns against using the upstream `foundry-rs/foundry-toolchain` action to test Arc contracts because it executes with Ethereum rules. This repository's CI pins Arc Foundry and sets `FOUNDRY_PROFILE=arc`.
+
+On Windows, open Ubuntu under WSL 2. The shared Windows folder appears under `/mnt/c`. For the x86-64 Ubuntu/WSL binary, Arc Foundry's documented release artifact is `arc-foundry-v0.8.0-2-x86_64-unknown-linux-gnu.tar.gz`. Verify its checksum before extracting, and put the extracted tools on PATH as `arc-forge`, `arc-cast`, and `arc-anvil`. Do not run `foundryup` as a substitute for Arc Foundry.
+
+Inside the Ubuntu/WSL shell:
+
+```bash
+cd /mnt/c/Users/NEW/Desktop/Settleva/contracts
+arc-forge --version
+FOUNDRY_PROFILE=arc arc-forge install foundry-rs/forge-std
+FOUNDRY_PROFILE=arc arc-forge build --sizes
+FOUNDRY_PROFILE=arc arc-forge test -vvv
+```
+
+A green upstream Foundry run alone is not an Arc-compatibility result. Arc Foundry can also start a local Arc execution environment with `arc-anvil --network arc`; its default test accounts are public, must never hold real funds, and are only for development. See the official README for forking and hardfork options.
+
+Do not proceed if workspace checks or Arc Foundry tests fail. The CI evidence record is metadata only; it does **not** deploy the website, backend or contract.
 
 ## 2. Create and custody the verifier key
 
@@ -54,29 +74,29 @@ The mainnet preflight resolves the configured ID/version through the Reclaim SDK
 
 ## 4. Deploy exactly one shared Settleva contract
 
-Set the deployment RPC and keys in the terminal environment or your secure secret manager. Avoid literal private-key assignments in commands that are saved to shell history.
+Set the deployment RPC and keys in the Ubuntu/WSL environment or your secure secret manager. Do not paste secrets into source control, a browser variable, or chat, and avoid literal private-key assignments in shell commands saved to history.
 
-From PowerShell:
+Inside WSL:
 
-```powershell
-Set-Location C:\Users\NEW\Desktop\Settleva\contracts
-$env:ARC_RPC_URL = "https://rpc.mainnet.arc.io"
-$env:VERIFICATION_SIGNER = "0xYOUR_VERIFIER_SIGNER_ADDRESS"
-# Set DEPLOYER_PRIVATE_KEY securely in the terminal environment; do not commit it.
-forge script script/Deploy.s.sol:DeploySettleva --rpc-url $env:ARC_RPC_URL --broadcast -vvvv
+```bash
+cd /mnt/c/Users/NEW/Desktop/Settleva/contracts
+export ARC_RPC_URL="https://rpc.mainnet.arc.io"
+export VERIFICATION_SIGNER="0xYOUR_VERIFIER_SIGNER_ADDRESS"
+# Supply DEPLOYER_PRIVATE_KEY securely in your terminal/secret manager.
+FOUNDRY_PROFILE=arc arc-forge script script/Deploy.s.sol:DeploySettleva --rpc-url "$ARC_RPC_URL" --broadcast -vvvv
 ```
 
 The deploy script refuses to broadcast unless the connected chain reports ID `5042`. Save the resulting deployment transaction hash and deployed contract address from the Foundry output. Do not deploy a separate contract per use case.
 
 Verify the result before configuring the app:
 
-```powershell
-cast chain-id --rpc-url $env:ARC_RPC_URL
-cast code 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS --rpc-url $env:ARC_RPC_URL
-cast call 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS "verificationSigner()(address)" --rpc-url $env:ARC_RPC_URL
+```bash
+arc-cast chain-id --rpc-url "$ARC_RPC_URL"
+arc-cast code 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS --rpc-url "$ARC_RPC_URL"
+arc-cast call 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS "verificationSigner()(address)" --rpc-url "$ARC_RPC_URL"
 ```
 
-Confirm bytecode exists and the returned signer equals the address derived from `SETTLEVA_VERIFIER_PRIVATE_KEY`. Record the deployment address/transaction in the team's deployment notes.
+Confirm bytecode exists and the returned signer equals the address derived from `SETTLEVA_VERIFIER_PRIVATE_KEY`. Record the deployment address and transaction in the deployment notes.
 
 ## 5. Configure and deploy the web/backend environment
 
@@ -106,7 +126,7 @@ The preflight is read-only against Arc and Reclaim and performs a harmless `SELE
 - required env variables have no template values;
 - both RPCs report chain ID 5042;
 - browser/server chain IDs and contract addresses agree;
-- Arc USDC bytecode exists and reports six decimals;
+- Arc USDC bytecode exists and reports six ERC-20 decimals;
 - the deployed Settleva contract has bytecode;
 - the server verifier key matches the contract's immutable `verificationSigner`;
 - the Reclaim SDK resolves the exact configured provider ID/version;
@@ -120,13 +140,14 @@ Do not launch if any check fails. This preflight validates configuration and inf
 Only after the preceding gates pass:
 
 1. Use a dedicated payer and payee wallet, and a minimal amount of Arc USDC.
-2. Approve the deployed Settleva contract for exactly the test amount, then create a payment whose expiry matches `condition.expiresAt` and whose commitment matches the intended policy.
-3. Confirm the funded payment record on Arc before starting the proof session.
-4. Obtain a fresh, genuine Reclaim proof through the deployed callback flow.
-5. Verify the backend accepts only the exact published provider/version and payment-bound context, evaluates the verified claims, and creates one attestation.
-6. Have the payee submit `release`; confirm the Arc receipt, `PaymentReleased` event, payee balance change and terminal `Released` state.
-7. Repeat with a nonqualifying or mismatched proof; no attestation/release should occur.
-8. Verify expiry and payer refund behavior on a separate test payment. Do not use the same payment for both settlement and refund checks.
+2. Ensure the payer has enough Arc native USDC to cover gas; native values use 18 decimals while ERC-20 amounts use six.
+3. Approve the deployed Settleva contract for exactly the test amount, then create a payment whose expiry matches `condition.expiresAt` and whose commitment matches the intended policy.
+4. Confirm the funded payment record on Arc before starting the proof session.
+5. Obtain a fresh, genuine Reclaim proof through the deployed callback flow.
+6. Verify the backend accepts only the exact published provider/version and payment-bound context, evaluates the verified claims, and creates one attestation.
+7. Have the payee submit `release`; confirm the Arc receipt, `PaymentReleased` event, payee balance change and terminal `Released` state.
+8. Repeat with a nonqualifying or mismatched proof; no attestation/release should occur.
+9. Verify expiry and payer refund behavior on a separate test payment. Do not use the same payment for both settlement and refund checks.
 
 Keep transaction hashes, contract address, chain ID, test evidence and observed outcomes. If the real proof-to-release path cannot complete, stop; do not market the product as live conditional settlement.
 

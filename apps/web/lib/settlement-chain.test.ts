@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { keccak256, stringToHex } from "viem";
 import {
+  ARC_NATIVE_CURRENCY,
   assertFundedPaymentSnapshot,
   SettlementPaymentStateError
 } from "./settlement-chain.ts";
@@ -30,6 +31,10 @@ function snapshot(overrides: Partial<{
     ...overrides
   };
 }
+
+test("Arc native USDC metadata uses 18 decimals", () => {
+  assert.equal(ARC_NATIVE_CURRENCY.decimals, 18);
+});
 
 test("a funded Arc payment bound to the exact condition/provider/expiry passes", () => {
   assert.doesNotThrow(() => assertFundedPaymentSnapshot(snapshot(), condition, conditionHash, now));

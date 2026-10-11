@@ -12,6 +12,17 @@ import { SETTLEVA_ABI } from "@settleva/sdk";
 
 const ARC_MAINNET_CHAIN_ID = 5042;
 
+/**
+ * Arc's native USDC balance uses 18 decimals for gas/native value.
+ * The ERC-20 USDC interface remains six-decimal for transfer/allowance amounts.
+ * See https://www.arc.io/blog/arc-compatibility-guide-for-existing-evm-apps.
+ */
+export const ARC_NATIVE_CURRENCY = {
+  name: "USDC",
+  symbol: "USDC",
+  decimals: 18
+} as const;
+
 export interface SettlementPaymentSnapshot {
   readonly expiry: bigint;
   readonly conditionHash: string;
@@ -102,7 +113,7 @@ export async function assertFundedPaymentOnchain(
   const chain = {
     id: ARC_MAINNET_CHAIN_ID,
     name: "Arc",
-    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+    nativeCurrency: ARC_NATIVE_CURRENCY,
     rpcUrls: { default: { http: [rpcUrl] } }
   } as const;
   const client = createPublicClient({ chain, transport: http(rpcUrl, { timeout: 10_000 }) });

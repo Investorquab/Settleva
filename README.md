@@ -23,8 +23,8 @@ The contract's release path uses a backend verification signer. It is **backend-
 - `packages/conditions`: condition schema, canonicalization, hashing and exact-claim evaluation.
 - `packages/providers`: evidence-provider adapters.
 - `packages/verification`: verified-data binding and persistent replay protection.
-- `contracts`: one shared Settleva contract and Foundry tests.
-- `docs`: architecture, trust boundaries, provider integration and deployment notes.
+- `contracts`: one shared Settleva contract and Solidity tests.
+- `docs`: architecture, trust boundaries, Arc readiness, and deployment notes.
 
 ## Playground
 
@@ -32,17 +32,26 @@ The website playground uses the repository's actual condition canonicalizer and 
 
 ## Development
 
-Requirements: Node.js 22+, pnpm 10.15.0, and Foundry for Solidity tests.
+Requirements: Node.js 22+, pnpm 10.15.0, and [Circle's Arc Foundry](https://github.com/circlefin/arc-foundry) for Arc-specific Solidity testing. Use a pinned Arc Foundry release, not `foundryup`, for the Arc-specific test toolchain. Circle documents that upstream Foundry CI does not test Arc execution semantics.
+
+From the repository root:
 
 ```sh
 pnpm install
 pnpm check
 pnpm test
 pnpm build
-cd contracts && forge test -vvv
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ARCHITECTURE_LOCK.md](docs/ARCHITECTURE_LOCK.md), [packages/sdk/README.md](packages/sdk/README.md), and [contracts/README.md](contracts/README.md).
+In an Ubuntu/WSL shell with `arc-forge` installed, from `contracts/`:
+
+```sh
+FOUNDRY_PROFILE=arc arc-forge install foundry-rs/forge-std
+FOUNDRY_PROFILE=arc arc-forge build --sizes
+FOUNDRY_PROFILE=arc arc-forge test -vvv
+```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/ARCHITECTURE_LOCK.md](docs/ARCHITECTURE_LOCK.md), [docs/ARC_READINESS_AUDIT.md](docs/ARC_READINESS_AUDIT.md), [docs/MAINNET_DEPLOYMENT_RUNBOOK.md](docs/MAINNET_DEPLOYMENT_RUNBOOK.md), [packages/sdk/README.md](packages/sdk/README.md), and [contracts/README.md](contracts/README.md).
 
 ## Security and production gates
 
@@ -50,4 +59,4 @@ The browser is not a trust authority. Never place provider credentials, database
 
 Before issuing a settlement attestation, the backend must verify the Reclaim proof against the pinned provider/version, bind it to the initiated session and payment context, evaluate verified extracted claims, and confirm the live Arc contract contains a funded payment whose condition hash, provider hash and expiry match the requested policy. Database/RPC/configuration failures fail closed.
 
-Mainnet readiness additionally requires secure production configuration, review of the contract's immutable verification signer, a deployed backend/database, and a controlled end-to-end settlement transaction. A passing CI run or successful playground simulation is not proof of production settlement.
+Mainnet readiness additionally requires secure production configuration, review of the contract's immutable verification signer, a deployed backend/database, a published and validated authoritative evidence provider, and a controlled end-to-end settlement transaction. A passing CI run or successful playground simulation is not proof of production settlement.
