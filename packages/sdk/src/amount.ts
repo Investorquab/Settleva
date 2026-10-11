@@ -28,9 +28,13 @@ export function toTokenUnits(amount: string, decimals: number): bigint {
     throw new Error("token decimals must be an integer between 0 and 255");
   }
   const normalized = normalizeTokenAmount(amount);
+  const fractionalDigits = normalized.split(".")[1]?.length ?? 0;
+  if (fractionalDigits > decimals) {
+    throw new Error("amount has more fractional digits than the token supports (" + decimals + ")");
+  }
   try {
     return parseUnits(normalized, decimals);
   } catch {
-    throw new Error("amount has more fractional digits than the token supports (" + decimals + ")");
+    throw new Error("amount could not be represented in the token's atomic units");
   }
 }
