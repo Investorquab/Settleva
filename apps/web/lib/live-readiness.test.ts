@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { validateLiveReadinessEnvironment } from "./live-readiness.ts";
 
@@ -18,6 +19,18 @@ const validEnv = {
   RECLAIM_CALLBACK_URL: "https://settleva.example/api/reclaim/callback",
   DATABASE_URL: "postgres://settleva:secret@db.example:5432/settleva"
 };
+
+const envExampleText = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
+const envExample = new Map(
+  envExampleText
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"))
+    .map((line) => {
+      const separator = line.indexOf("=");
+      assert.notEqual(separator, -1, `Invalid environment template line: ${line}`);
+      return [line.slice(0, separator), line.slice(separator + 1)] as const;
+    })
+);
 
 test("valid mainnet configuration normalizes the deployed contract and provider pins", () => {
   const config = validateLiveReadinessEnvironment(validEnv);
@@ -53,4 +66,49 @@ test("readiness rejects an HTTP or local Reclaim callback", () => {
     () => validateLiveReadinessEnvironment({...validEnv, RECLAIM_CALLBACK_URL:"http://localhost:3000/api/reclaim/callback"}),
     /public HTTPS/
   );
+});
+
+test("web environment template includes every required preflight variable", () => {
+  const requiredVariables = [
+    "ARC_RPC_URL",
+    "NEXT_PUBLIC_ARC_RPC_URL",
+    "SETTLEVA_CHAIN_ID",
+    "NEXT_PUBLIC_ARC_CHAIN_ID",
+    "SETTLEVA_CONTRACT_ADDRESS",
+    "NEXT_PUBLIC_SETTLEVA_ADDRESS",
+    "SETTLEVA_VERIFIER_PRIVATE_KEY",
+    "RECLAIM_APP_ID",
+    "RECLAIM_APP_SECRET",
+    "RECLAIM_PROVIDER_ID",
+    "RECLAIM_PROVIDER_VERSION",
+    "NEXT_PUBLIC_RECLAIM_PROVIDER_ID",
+    "NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION",
+    "RECLAIM_CALLBACK_URL",
+    "DATABASE_URL",
+    "NEXT_PUBLIC_GITHUB_REPOSITORY"
+  ];
+
+  for (const name of requiredVariables) {
+    assert.ok(envExample.has(name), `${name} is missing from apps/web/.env.example`);
+  }
+});
+
+test("web environment template leaves deployment secrets and unknown live resources blank", () => {
+  const mustBeConfiguredSecurely = [
+    "SETTLEVA_CONTRACT_ADDRESS",
+    "NEXT_PUBLIC_SETTLEVA_ADDRESS",
+    "SETTLEVA_VERIFIER_PRIVATE_KEY",
+    "RECLAIM_APP_ID",
+    "RECLAIM_APP_SECRET",
+    "RECLAIM_PROVIDER_ID",
+    "RECLAIM_PROVIDER_VERSION",
+    "NEXT_PUBLIC_RECLAIM_PROVIDER_ID",
+    "NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION",
+    "RECLAIM_CALLBACK_URL",
+    "DATABASE_URL"
+  ];
+
+  for (const name of mustBeConfiguredSecurely) {
+    assert.equal(envExample.get(name), "", `${name} must not imply a working production value`);
+  }
 });
