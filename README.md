@@ -39,7 +39,7 @@ Requirements: Node.js 22+, pnpm 10.15.0, and [Circle's Arc Foundry](https://gith
 From the repository root:
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 pnpm check
 pnpm test
 pnpm build

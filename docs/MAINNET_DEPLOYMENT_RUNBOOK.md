@@ -23,7 +23,7 @@ In PowerShell, run the workspace checks:
 ```powershell
 Set-Location C:\Users\NEW\Desktop\Settleva
 git pull --ff-only origin main
-pnpm install
+pnpm install --frozen-lockfile
 pnpm check
 pnpm test
 pnpm build
