@@ -1,104 +1,101 @@
-# Arc Compatibility & Microgrants Readiness Audit
+# Arc Compatibility & Arc Microgrants Readiness
 
-**Audit date:** 2026-10-11  
-**Repository base reviewed:** `Investorquab/Settleva` at `23ed7019e7892c9e4806a764ba75e0ef63acefa6`  
-**UI boundary:** `apps/web/app/page.tsx`, `apps/web/app/globals.css`, and `apps/web/app/layout.tsx` are locked. This audit does not authorize visual or page changes.
+**Reviewed:** 2026-10-11  
+**Latest source baseline:** `Investorquab/Settleva` `c93fe8acf10e75c52b19a6e6b01e459bd52d6dc6`; follow-up implementation is being validated in CI.  
+**UI protection:** The existing `apps/web/app/page.tsx`, `apps/web/app/globals.css`, and `apps/web/app/layout.tsx` are locked and must stay unchanged without explicit approval.
 
 ## Executive assessment
 
-Settleva's core stack is directionally appropriate for Arc: Solidity contracts, TypeScript/Next.js, viem, Postgres for persistent replay protection, and Reclaim's SDK for off-chain proof verification. Arc is EVM-compatible, so a new programming model or wholesale stack replacement is not required.
+Settleva's stack fits Arc's EVM model: Solidity, TypeScript/Next.js, viem, Reclaim's SDK, and PostgreSQL for persistent session/replay protection. A wholesale rewrite is not needed. The important Arc distinction is native-USDC gas (18 decimals) versus the ERC-20 interface used for escrow (6 decimals). The project also needs Arc-specific contract testing: Circle explicitly says upstream Foundry can run Ethereum rules while tests pass, so this repository pins and runs Arc Foundry with `FOUNDRY_PROFILE=arc`.
 
-There is, however, a **critical toolchain validation gap**: the previous CI workflow installed upstream Foundry and ran `forge test` without Arc execution semantics. Circle's own Arc Foundry repository explicitly warns against using `foundry-rs/foundry-toolchain` for Arc contract tests because it may execute with Ethereum rules while still passing. The repository therefore needed Arc Foundry pinned in CI, an Arc profile, and corrected local deployment/test instructions.
+## Official sources
 
-## Findings
-
-### 1. Chain and token constants
-
-Confirmed project constants:
-- Arc mainnet chain ID: `5042`.
-- Arc mainnet RPC: `https://rpc.mainnet.arc.io`.
-- Arc explorer: `https://explorer.arc.io`.
-- Arc USDC ERC-20 interface: `0x3600000000000000000000000000000000000000`, six decimals.
-
-Important Arc distinction from Circle's compatibility guide:
-- Native USDC balance/gas/value uses 18 decimals.
-- ERC-20 USDC balance, approvals, `transfer`, and `transferFrom` use six decimals.
-- These are two interfaces to the same underlying balance, not two separate assets.
-
-The server-side viem chain metadata had mistakenly labelled native USDC as six decimals. The code fix in this audit changes its native currency metadata to 18 and adds a regression test. The preflight's ERC-20 USDC decimals check should remain six.
-
-### 2. Arc Foundry and test strategy
-
-Official references:
 - Arc Foundry: https://github.com/circlefin/arc-foundry
-- Release v0.8.0-2: https://github.com/circlefin/arc-foundry/releases/tag/v0.8.0-2
-- Arc compatibility guide: https://www.arc.io/blog/arc-compatibility-guide-for-existing-evm-apps
+- Arc EVM compatibility guide: https://www.arc.io/blog/arc-compatibility-guide-for-existing-evm-apps
+- Arc mainnet RPC: https://rpc.mainnet.arc.io
+- Arc explorer: https://explorer.arc.io
+- Arc Microgrants: https://community.arc.io/public/events/arc-microgrants-f8tijfjhyq
 
-Arc Foundry provides `arc-forge`, `arc-cast`, and `arc-anvil`. On Windows, the official precompiled-binary table lists Windows x86-64 as build-from-source; the Linux x86-64 glibc binary is suitable for Ubuntu/WSL. Arc Foundry is not installed by `foundryup`. The CI should download a pinned release, verify its published SHA-256, and run contract build/tests using `FOUNDRY_PROFILE=arc`.
+## Correct chain/token assumptions
 
-Ordinary Foundry tests with a mock ERC-20 are useful unit tests but do not prove compatibility with Arc's native USDC behavior, system contracts, blocklist rules, or special event semantics. Settleva does not currently use payable native-value transfers or an indexer, so not every Arc compatibility edge applies. Before broad launch, it still needs an Arc-specific integration validation of the real USDC ERC-20 approval/funding/release flow and a real proof-to-attestation-to-release transaction.
+- Arc mainnet chain ID: `5042`.
+- The documented Arc USDC ERC-20 interface is `0x3600000000000000000000000000000000000000`, 6 decimals.
+- Native Arc USDC value/gas uses 18 decimals. These are two interfaces to the same underlying balance, not separate assets.
+- The current contract defines `ARC_USDC()` and rejects any other ERC-20 address. SDK preparation and transaction helpers reject a non-USDC address, the server refuses an attestation for non-USDC payment records, and preflight checks the deployed getter.
+- The deployer key and immutable verifier key must be distinct. The deployment script confirms `SETTLEVA_VERIFIER_PRIVATE_KEY` derives the supplied `VERIFICATION_SIGNER`.
 
-### 3. Smart-contract architecture
+## Arc Foundry
 
-Correct architectural choices:
-- One shared `Settleva.sol` contract, with separate payment records for each use case.
-- Payment commitments bind the payment ID, policy hash, provider hash, expiry and state.
-- Release requires a backend-signed attestation; the contract checks the immutable signer and prevents proof reuse.
-- The payer can refund after expiry; the payee can release only before expiry.
+The CI workflow downloads the pinned Circle release `v0.8.0-2`, verifies its published SHA-256, installs `arc-forge`, `arc-cast`, and `arc-anvil`, then runs build/tests with `FOUNDRY_PROFILE=arc`. The Arc contract job has passed on the prior committed toolchain update.
 
-Security/trust boundary:
-- This is backend-attested settlement, not trustless on-chain verification of Reclaim proofs. That must remain explicit in the documentation and demo.
-- The verifier signer is immutable. Losing/rotating it requires deploying a replacement contract.
-- The current contract accepts a token address supplied to `createPayment`. If Settleva is intended to enforce Arc USDC only, the contract must explicitly enforce the USDC address; if generic ERC-20 escrow is intentional, the product/docs must say so clearly. This choice should be resolved before the mainnet deployment because the contract is not mutable after deployment.
+Local Windows developers should use the Linux x86-64 Arc Foundry binary under Ubuntu/WSL 2, verify the checksum from the official releases, and run:
 
-### 4. Proof provider and backend
+```bash
+cd /mnt/c/Users/NEW/Desktop/Settleva/contracts
+FOUNDRY_PROFILE=arc arc-forge install foundry-rs/forge-std
+FOUNDRY_PROFILE=arc arc-forge build --sizes
+FOUNDRY_PROFILE=arc arc-forge test -vvv
+```
 
-The backend has good fail-closed principles: it pins provider/version, verifies through Reclaim, binds proof context to the session/payment/condition, evaluates extracted claims, checks the on-chain funded commitment, protects against replay with Postgres, and only then signs a contract-bound attestation.
+Do not substitute `foundryup`: that installs upstream Foundry, not Arc Foundry. Contract unit tests are still not a substitute for a real mainnet USDC integration test.
 
-Remaining blocker: Settleva still needs a **real, published Reclaim provider ID/version** that works with the configured app credentials and creates a fresh proof bound to an actual GitHub deployment-status event. Placeholder values, a draft/static API response, or a demo-only proof do not satisfy that requirement. Validate this before paying deployment gas or accepting funds.
+## Proof verification and trust boundary
 
-### 5. User-facing app and current implementation scope
+The production adapter is limited to a Reclaim-backed GitHub deployment-status condition with these five claims: repository full name, deployment ref, commit SHA, environment, and status. The backend derives the corresponding dynamic provider parameters only from the condition committed to the escrow, pins the configured provider ID/version, verifies Reclaim proof signatures and app-secret TEE attestation, enforces timestamp freshness, binds context to session/payment/condition, evaluates claims, and uses persistent Postgres replay protection.
 
-The current website playground is documented as a simulation: it evaluates local condition/evidence JSON and does not connect a wallet, verify a real provider proof, submit transactions, or transfer USDC. That is fine for a policy playground but, by itself, does not demonstrate live conditional settlement. The public submission should have a live Arc deployment that can be independently inspected, plus transaction evidence for at least one successful end-to-end lifecycle. This audit does not authorize a UI change; use the locked UI as-is and plan any product-facing integration separately.
+**Unresolved external blocker:** an actual published Reclaim provider ID/version must be configured and tested with the app credentials. The provider must accept the five parameter names documented in `docs/reclaim/SETTLEVA_PROVIDER_SPEC.md`, return the exact extracted fields, and produce a fresh payment-bound proof. A draft or public/static API response is insufficient. The code remains fail-closed until these account-side details are real.
 
-### 6. Arc Microgrants: official requirements
+The contract uses backend-attested settlement. It does not verify Reclaim proofs trustlessly on-chain; compromise of the immutable verifier key could authorize invalid release. That boundary must be described plainly in the submission.
 
-Official event page: https://community.arc.io/public/events/arc-microgrants-f8tijfjhyq
+## App behavior
 
-The page describes twenty `$500 USDC` microgrants from a `$10,000 USDC` pool. It says submissions close **October 14, 2026 at 23:59 ET** (October 15 at 04:59 Lagos time, WAT). It asks for:
-- A live deployment on Arc mainnet with an openable link.
-- A public repository.
-- A short explanation of what the project does and what it uses Arc for.
-- A public builder profile (GitHub, X, or Farcaster).
+The approved root page and its current styling were not changed. It remains a simulation playground and must not be presented as a real transfer.
 
-The event explicitly excludes testnet-only projects, mockups/slide decks, projects without an Arc component, and work already funded by a Circle or Arc program. It evaluates Arc relevance, technical credibility, quality of the build, and potential. Hackathon continuations are eligible. The work must be yours or you must have submission rights, and payout requires a wallet that can receive USDC on Arc.
+A separate `/live` route was added as a functional interaction path. When the contract address and published Reclaim provider are configured it:
+1. asks a wallet to switch to Arc mainnet;
+2. validates the deployed USDC allowlist;
+3. approves the exact ERC-20 amount and creates one escrow transaction;
+4. requests Reclaim proof using the committed GitHub repository/ref/SHA/environment/status;
+5. polls private status using a POST body token;
+6. waits for server proof verification; then
+7. lets only the designated payee submit release, or lets the original payer refund after expiry.
 
-**This is a mainnet-working-project requirement, not merely a source-code or CI requirement.** A green Vercel check or a GitHub deployment metadata record does not fulfill it.
+It displays links for the transaction receipts. It is **not considered live** until tested after deployment with a real proof and confirmed mainnet release. No provider, secrets, contract address or successful transaction is fabricated in code.
 
-## Readiness checklist
+The database migration `pnpm --filter @settleva/web db:migrate` creates/reconciles the session/replay tables and partial unique indexes. CI runs it against a real PostgreSQL service. Production preflight now checks required table/column/index presence as well as basic connectivity.
 
-| Requirement | Assessment at audit time |
+## Official Arc Microgrants requirements
+
+Official page: https://community.arc.io/public/events/arc-microgrants-f8tijfjhyq
+
+The program offers twenty $500 USDC microgrants from a $10,000 pool. The official page says submissions close **October 14, 2026 at 23:59 ET** (October 15 at 04:59 Lagos time, WAT), and that applications are reviewed on a rolling basis. A submission must already be deployed and working on Arc mainnet, with one openable live link, a public repo, a short project/Arc-use description, and a public builder profile on GitHub, X, or Farcaster. Testnet-only builds, design mockups/slide decks, projects without an Arc component, and projects already funded by Circle/Arc are excluded.
+
+Settleva's public repository and intended Arc relevance are in place. The mandatory **working mainnet deployment and demonstrated actual settlement** remain unproven and are release blockers. A GitHub CI evidence record, green Vercel check, or playground simulation is not a mainnet deployment.
+
+## Readiness table
+
+| Requirement | Current state |
 |---|---|
-| Solidity/TypeScript stack fits Arc | Yes; no wholesale stack replacement needed |
-| Chain ID/RPC correct | Yes |
-| ERC-20 USDC address and decimals | Correct address; six decimals |
-| Native USDC metadata | Correction required: 18 decimals |
-| Arc-specific contract test toolchain | Correction required: use Arc Foundry, not upstream-only CI |
-| One shared escrow contract for four use cases | Correct architectural direction |
-| Real published pinned Reclaim provider | Not confirmed; launch blocker |
-| Settleva contract deployed and verified on Arc mainnet | Not yet evidenced |
-| Full live USDC funding -> proof -> attestation -> release | Not yet evidenced |
-| Public repo | Available |
-| Public live-project link showing actual Arc behavior | Not yet proven by simulation-only playground |
-| UI changes | Out of scope without explicit permission |
+| Arc EVM stack | Appropriate; no rewrite required |
+| Arc Foundry test profile in CI | Implemented; prior Arc Foundry job passed |
+| Native/EVM USDC decimal distinction | Corrected: 18 native, 6 ERC-20 |
+| Arc USDC-only contract/SDK/backend guard | Added in this follow-up; verify via CI |
+| Published Reclaim provider and exact version | Not confirmed; launch blocker |
+| Database schema migration and schema-aware preflight | Added in this follow-up; verify via CI and run in production |
+| Website route that supports real wallet flow | Added independently at `/live`; existing homepage files are preserved |
+| Deployed/verified Settleva contract on Arc mainnet | Not yet evidenced |
+| Full real USDC funding → proof → attestation → release | Not yet evidenced |
+| Public repository and builder profile | Available |
+| Arc Microgrants submission | Not ready until live settlement evidence exists |
 
-## Recommended execution order
+## Remaining order of operations
 
-1. Pin Arc Foundry and checksum in CI, add the Arc profile, correct native USDC metadata, and use Arc Foundry commands in all repo instructions.
-2. Run Arc-specific unit tests locally and in CI; then validate the real USDC ERC-20 path and deployment configuration against Arc-specific execution.
-3. Confirm a published, dynamic Reclaim provider/version and run one real proof locally/staging without moving mainnet funds.
-4. Resolve whether the contract is intentionally generic ERC-20 or USDC-only **before deployment**.
-5. Deploy one shared Settleva contract to Arc mainnet, verify the bytecode and immutable signer, configure production backend/database/provider secrets, and pass `preflight:mainnet`.
-6. Complete a controlled low-value mainnet test, preserve explorer transaction links and evidence, then submit the public app/repo/profile before the deadline.
+1. Ensure this follow-up batch passes the full CI (workspace tests/build and Arc Foundry tests).
+2. Pull locally and run workspace checks; run Arc Foundry tests under WSL as above.
+3. Publish and validate the exact Reclaim provider and app credentials; verify positive and negative proofs.
+4. Deploy one shared contract with separate deployer/verifier keys, verify its code and `ARC_USDC()`/signer getters, then configure the production backend and DB.
+5. Run the DB migration and pass `pnpm --filter @settleva/web preflight:mainnet`.
+6. Complete a controlled low-value mainnet escrow → Reclaim proof → backend attestation → payee release; also verify invalid proof rejection and expiry refund with separate test payments.
+7. Submit the direct deployed `/live` link, repository, and description before the official cutoff.
 
-No frontend visual/page file is part of this fix.  
+This audit records readiness, not deployment evidence.

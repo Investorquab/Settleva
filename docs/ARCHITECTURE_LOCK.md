@@ -14,6 +14,8 @@ The contract is not a payment dashboard, and the playground is not a deployment 
 - The only currently supported policy operator is exact string equality (`equals`).
 - Claims are sorted deterministically by field, operator, then value; the condition is canonical JSON with the stable fields `version`, `provider`, `providerVersion`, `claims`, and `expiresAt`.
 - The condition commitment is EVM-native `keccak256(UTF-8(canonical JSON))`, implemented by the shared conditions package. It is **not SHA-256**.
+
+The only accepted settlement asset is Arc USDC's ERC-20 interface at `0x3600000000000000000000000000000000000000`. The Solidity contract, SDK, live route and mainnet preflight all enforce/check the same token address. Native USDC gas values use 18 decimals; ERC-20 escrow transfers use six.
 - The payment ID is a deterministic keccak256 commitment to normalized payer/payee/token addresses, normalized human token amount, expiry, and canonical condition.
 - Payment expiry must equal `condition.expiresAt`. The client, SDK, backend, and funded on-chain record must agree on the exact condition hash, provider hash, and expiry.
 
@@ -57,9 +59,9 @@ The gaming, freelance, commerce, and agentic examples are illustrative simulatio
 
 ## 7. Locked UI and playground behavior
 
-The landing page and visual system are locked. Do not alter `apps/web/app/page.tsx`, `apps/web/app/globals.css`, or `apps/web/app/layout.tsx` without explicit approval.
+The landing page and visual system are locked. Do not alter `apps/web/app/page.tsx`, `apps/web/app/globals.css`, or `apps/web/app/layout.tsx` without explicit approval. The standalone `/live` route is additive and has its own CSS module; it must not restyle or replace the approved homepage.
 
-The playground must use the shared condition canonicalizer and evaluator, allow guided and developer modes, and clearly label all results as simulated. It must not deploy contracts, claim cryptographic proof verification, connect a wallet, or imply that USDC moved.
+The homepage playground must use the shared condition canonicalizer and evaluator, allow guided and developer modes, and clearly label all results as simulated. It must not deploy contracts, claim cryptographic proof verification, connect a wallet, or imply that USDC moved. Real wallet transactions belong only in the separate `/live` route, which must display transaction links and backend-attestation trust boundaries.
 
 ## 8. Mainnet release gate
 

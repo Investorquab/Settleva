@@ -21,7 +21,9 @@ The attestation commits to the chain ID, the exact Settleva contract address, pa
 
 - Chain ID: `5042`
 - RPC: `https://rpc.mainnet.arc.io`
-- Arc USDC: `0x3600000000000000000000000000000000000000` (6 decimals)
+- Arc USDC ERC-20 interface: `0x3600000000000000000000000000000000000000` (6 decimals).
+- Arc native USDC for gas/value uses 18 decimals; do not reuse native units for ERC-20 transfers.
+- Settleva accepts only the canonical Arc USDC ERC-20 address, exposed by the contract's `ARC_USDC()` getter.
 
 ## Deploy
 
@@ -29,14 +31,17 @@ The script refuses to run unless the connected chain ID is Arc mainnet (`5042`).
 
 - `DEPLOYER_PRIVATE_KEY`
 - `VERIFICATION_SIGNER` — the address derived from the backend's `SETTLEVA_VERIFIER_PRIVATE_KEY`
-- `ARC_RPC_URL` — Arc mainnet RPC URL used by Foundry
+- `SETTLEVA_VERIFIER_PRIVATE_KEY` — a dedicated server-side key; deployment verifies that it derives the signer address and differs from the deployer key
+- `ARC_RPC_URL` — Arc mainnet RPC URL used by Arc Foundry
 
-From `contracts/`:
+From `contracts/` in Ubuntu/WSL. This prompts without echoing private keys and derives the immutable signer address from the dedicated verifier key:
 
 ```bash
-export DEPLOYER_PRIVATE_KEY=...
-export VERIFICATION_SIGNER=...
-forge script script/Deploy.s.sol:DeploySettleva --rpc-url "$ARC_RPC_URL" --broadcast -vvvv
+export ARC_RPC_URL="https://rpc.mainnet.arc.io"
+read -rsp "Deployer private key: " DEPLOYER_PRIVATE_KEY; echo; export DEPLOYER_PRIVATE_KEY
+read -rsp "Dedicated verifier private key: " SETTLEVA_VERIFIER_PRIVATE_KEY; echo; export SETTLEVA_VERIFIER_PRIVATE_KEY
+export VERIFICATION_SIGNER="$(arc-cast wallet address --private-key "$SETTLEVA_VERIFIER_PRIVATE_KEY")"
+FOUNDRY_PROFILE=arc arc-forge script script/Deploy.s.sol:DeploySettleva --rpc-url "$ARC_RPC_URL" --broadcast -vvvv
 ```
 
 After deployment, configure the backend's `SETTLEVA_CHAIN_ID=5042` and `SETTLEVA_CONTRACT_ADDRESS` to the exact deployed address. The signer will refuse to issue an attestation unless both are valid. The frontend must use the same deployed address and chain ID.

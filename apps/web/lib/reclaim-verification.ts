@@ -9,6 +9,7 @@ import {
   assertConditionCommitment,
   assertConditionEvaluation,
   assertGitHubDeploymentEvidence,
+  assertProofFreshness,
   assertProofIdentifier,
   assertProviderPin,
   assertResolvedProviderPin,
@@ -79,6 +80,9 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const verifyingContract: Address = getAddress(configuredContract);
 
   assertProviderPin(input.condition,input.expectedProviderId,input.expectedProviderVersion);
+  if (!isGitHubDeploymentCondition(input.condition)) {
+    throw new Error("Only GitHub deployment-status proofs are enabled for production settlement.");
+  }
 
   try {
     await assertFundedPaymentOnchain(
@@ -97,15 +101,26 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
     throw error;
   }
 
-  const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{log:false});
+  const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{
+    log:false,
+    providerVersion:input.expectedProviderVersion,
+    useBrowserExtension:false
+  });
   const {providerId,providerVersion} = requestConfig.getProviderVersion();
   assertResolvedProviderPin(providerId,providerVersion,input.expectedProviderId,input.expectedProviderVersion);
 
-  const result = await verifyProof(input.proofs as Parameters<typeof verifyProof>[0],{providerId,providerVersion});
+  const result = await verifyProof(
+    input.proofs as Parameters<typeof verifyProof>[0],
+    {providerId,providerVersion,teeAttestation:{appSecret}}
+  );
   if (!result.isVerified) throw new Error(result.error?.message || "Reclaim rejected the proof.");
+  if (result.isTeeAttestationVerified !== true) {
+    throw new Error("Reclaim application TEE attestation was not verified; no settlement attestation will be issued.");
+  }
 
   const proof = input.proofs[0] as Record<string, unknown>;
   const claimData = proof.claimData as Record<string, unknown> | undefined;
+  assertProofFreshness(claimData?.timestampS);
   const proofIdentifier = assertProofIdentifier(claimData?.identifier);
 
   const data = Array.isArray(result.data) ? result.data : [];

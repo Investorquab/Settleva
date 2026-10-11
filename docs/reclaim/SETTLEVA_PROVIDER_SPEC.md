@@ -46,6 +46,12 @@ The Reclaim request context binds the payment ID and condition hash. Reclaim doc
 10. The contract verifies that attestation against payment ID, condition hash, provider hash and Reclaim proof identifier.
 11. Only then can the payee release the funds.
 
+## Runtime request parameters
+
+The backend uses `ReclaimProofRequest.setParams()` with the five condition-committed values, mapped to `github_repo_full_name`, `github_deployment_ref`, `github_deployment_sha`, `github_deployment_environment`, and `github_deployment_status`. It pins the exact version, asks Reclaim to verify the application-secret TEE attestation, enforces proof timestamp freshness, checks exact context/session binding, and evaluates all five claims before signing.
+
+The published provider must be tested to confirm it consumes these exact parameter names and returns the five expected extracted fields. The repository cannot claim provider publication or acceptance until this test is performed with real Reclaim app credentials.
+
 ## Provider acceptance tests
 
 Before production deployment, demonstrate that separate proofs fail for:

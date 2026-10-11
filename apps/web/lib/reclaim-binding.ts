@@ -1,4 +1,6 @@
 import type { Hex } from "viem";
+import type { PaymentCondition } from "@settleva/conditions";
+import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
 
 export interface ParsedProofContext {
   readonly paymentId: string;
@@ -52,4 +54,26 @@ export function extractedParametersToClaims(
     field: RECLAIM_GITHUB_FIELD_MAP[field] ?? field,
     value: String(value)
   }));
+}
+
+
+/**
+ * Build exact dynamic parameters from the policy locked on-chain.
+ * Values are copied from committed claims; callers cannot supply an unbound URL.
+ */
+export function buildReclaimProviderParams(condition: PaymentCondition): Record<string, string> {
+  if (!isGitHubDeploymentCondition(condition)) {
+    throw new Error("Only the GitHub deployment-status proof adapter is enabled for real settlement.");
+  }
+  const claims = extractGitHubDeploymentClaims(condition.claims);
+  if (!claims) {
+    throw new Error("GitHub deployment condition must include repository, ref, commit SHA, environment and status.");
+  }
+  return {
+    github_repo_full_name: claims.repository,
+    github_deployment_ref: claims.ref,
+    github_deployment_sha: claims.sha,
+    github_deployment_environment: claims.environment,
+    github_deployment_status: claims.status
+  };
 }

@@ -9,6 +9,13 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const SETTLEVA_ABI = [
   {
     type: "function",
+    name: "ARC_USDC",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
     name: "verificationSigner",
     stateMutability: "view",
     inputs: [],
@@ -213,6 +220,17 @@ if (serverClient && serverChainOk) {
       if (!code || code === "0x") throw new Error("No bytecode found at SETTLEVA_CONTRACT_ADDRESS");
     });
 
+    await check("Deployed Settleva contract enforces the canonical Arc USDC interface", async () => {
+      const token = await serverClient.readContract({
+        address: serverContractAddress,
+        abi: SETTLEVA_ABI,
+        functionName: "ARC_USDC"
+      });
+      if (getAddress(token) !== getAddress(ARC_USDC)) {
+        throw new Error("Deployed contract ARC_USDC getter does not match the documented Arc USDC address");
+      }
+    });
+
     if (verifierAccount) {
       await check("On-chain immutable verification signer matches the configured private key", async () => {
         const signer = await serverClient.readContract({
@@ -253,6 +271,65 @@ if (values.DATABASE_URL) {
       sql = postgres(values.DATABASE_URL, { max: 1, connect_timeout: 8, idle_timeout: 1 });
       const rows = await sql`select 1 as settleva_preflight`;
       if (Number(rows[0]?.settleva_preflight) !== 1) throw new Error("Database probe returned an unexpected result");
+
+      const tables = await sql`
+        select
+          to_regclass('public.settleva_reclaim_sessions') as sessions_table,
+          to_regclass('public.settleva_reclaim_replay') as replay_table
+      `;
+      if (!tables[0]?.sessions_table || !tables[0]?.replay_table) {
+        throw new Error("Settleva session/replay tables are missing; run pnpm --filter @settleva/web db:migrate");
+      }
+
+      const columns = await sql`
+        select table_name, column_name
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name in ('settleva_reclaim_sessions', 'settleva_reclaim_replay')
+      `;
+      const actualColumns = new Set(columns.map((row) => row.table_name + "." + row.column_name));
+      const requiredColumns = [
+        "settleva_reclaim_sessions.session_id",
+        "settleva_reclaim_sessions.payment_id",
+        "settleva_reclaim_sessions.condition_hash",
+        "settleva_reclaim_sessions.condition",
+        "settleva_reclaim_sessions.provider_id",
+        "settleva_reclaim_sessions.provider_version",
+        "settleva_reclaim_sessions.status_token_hash",
+        "settleva_reclaim_sessions.status",
+        "settleva_reclaim_sessions.proof_identifier",
+        "settleva_reclaim_sessions.verification_signature",
+        "settleva_reclaim_replay.identifier_type",
+        "settleva_reclaim_replay.identifier",
+        "settleva_reclaim_replay.session_id",
+        "settleva_reclaim_replay.proof_identifier",
+        "settleva_reclaim_replay.payment_id",
+        "settleva_reclaim_replay.condition_hash"
+      ];
+      const missingColumns = requiredColumns.filter((column) => !actualColumns.has(column));
+      if (missingColumns.length) {
+        throw new Error("Settleva DB schema is incomplete (" + missingColumns.join(", ") + "); run pnpm --filter @settleva/web db:migrate");
+      }
+
+      const indexes = await sql`
+        select indexname from pg_indexes
+        where schemaname = 'public'
+          and indexname in (
+            'settleva_reclaim_sessions_payment_idx',
+            'settleva_reclaim_replay_session_idx',
+            'settleva_reclaim_replay_proof_idx'
+          )
+      `;
+      const existingIndexes = new Set(indexes.map((row) => row.indexname));
+      const requiredIndexes = [
+        "settleva_reclaim_sessions_payment_idx",
+        "settleva_reclaim_replay_session_idx",
+        "settleva_reclaim_replay_proof_idx"
+      ];
+      const missingIndexes = requiredIndexes.filter((indexName) => !existingIndexes.has(indexName));
+      if (missingIndexes.length) {
+        throw new Error("Settleva DB indexes are missing (" + missingIndexes.join(", ") + "); run pnpm --filter @settleva/web db:migrate");
+      }
     } finally {
       if (sql) await sql.end({ timeout: 3 });
     }

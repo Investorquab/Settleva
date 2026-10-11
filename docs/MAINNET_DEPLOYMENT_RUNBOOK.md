@@ -12,6 +12,7 @@ This is the single operational source of truth for taking Settleva from the curr
 - Arc USDC ERC-20 interface: `0x3600000000000000000000000000000000000000`, six decimals.
 - Arc native USDC for gas: 18 decimals. Do not reuse ERC-20 units for native-value amounts.
 - Release authorizer: immutable `verificationSigner` set by the contract constructor.
+- Asset: only Arc USDC ERC-20 `0x3600000000000000000000000000000000000000` (6 decimals). Arc native USDC for gas uses 18 decimals.
 - Current proof scope: a real, published and pinned Reclaim GitHub deployment-status provider is required. Do not use placeholder IDs or a static/unbound proof.
 - Gaming, freelance, commerce and agentic examples remain playground simulations until source-specific evidence adapters have been implemented and validated.
 
@@ -81,12 +82,14 @@ Inside WSL:
 ```bash
 cd /mnt/c/Users/NEW/Desktop/Settleva/contracts
 export ARC_RPC_URL="https://rpc.mainnet.arc.io"
-export VERIFICATION_SIGNER="0xYOUR_VERIFIER_SIGNER_ADDRESS"
-# Supply DEPLOYER_PRIVATE_KEY securely in your terminal/secret manager.
+read -rsp "Deployer private key: " DEPLOYER_PRIVATE_KEY; echo; export DEPLOYER_PRIVATE_KEY
+read -rsp "Dedicated verifier private key: " SETTLEVA_VERIFIER_PRIVATE_KEY; echo; export SETTLEVA_VERIFIER_PRIVATE_KEY
+export VERIFICATION_SIGNER="$(arc-cast wallet address --private-key "$SETTLEVA_VERIFIER_PRIVATE_KEY")"
+printf "Verifier address: %s\\n" "$VERIFICATION_SIGNER"
 FOUNDRY_PROFILE=arc arc-forge script script/Deploy.s.sol:DeploySettleva --rpc-url "$ARC_RPC_URL" --broadcast -vvvv
 ```
 
-The deploy script refuses to broadcast unless the connected chain reports ID `5042`. Save the resulting deployment transaction hash and deployed contract address from the Foundry output. Do not deploy a separate contract per use case.
+The deploy script refuses to broadcast unless the connected chain reports ID `5042`, checks `SETTLEVA_VERIFIER_PRIVATE_KEY` derives exactly `VERIFICATION_SIGNER`, and requires deployer/verifier keys to be different. Supply both securely in WSL or a secret manager, never in source control or chat. Save the deployment transaction hash and deployed contract address from the Arc Foundry output. Do not deploy a separate contract per use case.
 
 Verify the result before configuring the app:
 
@@ -121,13 +124,13 @@ Set-Location C:\Users\NEW\Desktop\Settleva
 pnpm --filter @settleva/web preflight:mainnet
 ```
 
-The preflight is read-only against Arc and Reclaim and performs a harmless `SELECT 1` database probe. It checks:
+The preflight is read-only against Arc and Reclaim and performs a harmless `SELECT 1` database probe. First apply the schema with `pnpm --filter @settleva/web db:migrate` against the same production database. It checks:
 
 - required env variables have no template values;
 - both RPCs report chain ID 5042;
 - browser/server chain IDs and contract addresses agree;
 - Arc USDC bytecode exists and reports six ERC-20 decimals;
-- the deployed Settleva contract has bytecode;
+- the deployed Settleva contract has bytecode and `ARC_USDC()` returns the canonical Arc USDC address;
 - the server verifier key matches the contract's immutable `verificationSigner`;
 - the Reclaim SDK resolves the exact configured provider ID/version;
 - the replay/session database accepts a query; and

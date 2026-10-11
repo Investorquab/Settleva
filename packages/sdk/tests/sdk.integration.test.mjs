@@ -11,7 +11,7 @@ import { hashCondition } from "@settleva/conditions";
 
 const payer = "0x1111111111111111111111111111111111111111";
 const payee = "0x2222222222222222222222222222222222222222";
-const token = "0x3333333333333333333333333333333333333333";
+const token = "0x3600000000000000000000000000000000000000";
 const settlevaAddress = "0x4444444444444444444444444444444444444444";
 
 function input(amount = "1.25", expiry = Math.floor(Date.now() / 1000) + 3600) {
@@ -36,6 +36,13 @@ test("equivalent decimal strings create the same canonical payment commitment", 
   assert.equal(first.conditionHash, hashCondition(first.request.condition));
   assert.equal(JSON.parse(first.proofContext).paymentId, first.paymentId);
   assert.equal(JSON.parse(first.proofContext).conditionHash, first.conditionHash);
+});
+
+test("SDK rejects arbitrary ERC-20 token addresses", () => {
+  assert.throws(
+    () => prepareCreatePayment({ ...input(), token: "0x3333333333333333333333333333333333333333" }),
+    /Arc USDC only/
+  );
 });
 
 test("zero representations and unsupported amount syntax are rejected", () => {

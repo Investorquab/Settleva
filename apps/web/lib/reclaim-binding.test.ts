@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildReclaimProviderParams,
   extractedParametersToClaims,
   parseProofContext,
   parseProofIdentifier
@@ -120,4 +121,39 @@ test("existing canonical dotted fields remain unchanged", () => {
       {field: "attempt", value: "2"}
     ]
   );
+});
+
+
+test("Reclaim request params derive from the five committed GitHub deployment claims", () => {
+  const policy = {
+    version: "1.0" as const,
+    provider: "published-provider",
+    providerVersion: "1.0.0",
+    claims: [
+      {field:"github.repo.full_name",operator:"equals" as const,value:"Investorquab/Settleva"},
+      {field:"github.deployment.ref",operator:"equals" as const,value:"main"},
+      {field:"github.deployment.sha",operator:"equals" as const,value:"6dd48e33fa2dada31d33dd77c8294c61987e81d9"},
+      {field:"github.deployment.environment",operator:"equals" as const,value:"production"},
+      {field:"github.deployment.status",operator:"equals" as const,value:"success"}
+    ],
+    expiresAt: Math.floor(Date.now()/1000)+3600
+  };
+  assert.deepEqual(buildReclaimProviderParams(policy), {
+    github_repo_full_name:"Investorquab/Settleva",
+    github_deployment_ref:"main",
+    github_deployment_sha:"6dd48e33fa2dada31d33dd77c8294c61987e81d9",
+    github_deployment_environment:"production",
+    github_deployment_status:"success"
+  });
+});
+
+test("unsupported policy families cannot be sent to the production Reclaim adapter", () => {
+  const policy = {
+    version: "1.0" as const,
+    provider: "settleva.demo.milestone",
+    providerVersion: "1",
+    claims: [{field:"milestone.status",operator:"equals" as const,value:"accepted"}],
+    expiresAt: Math.floor(Date.now()/1000)+3600
+  };
+  assert.throws(() => buildReclaimProviderParams(policy), /GitHub deployment-status/);
 });

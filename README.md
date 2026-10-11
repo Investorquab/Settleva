@@ -12,13 +12,13 @@ The four featured scenarios—gaming rewards, freelance milestones, conditional 
 
 ## Current verified scope
 
-The repository contains the shared settlement contract, SDK preparation and transaction helpers, a Reclaim verification backend, persistent replay protection, and a website playground. The current production proof adapter is configured around GitHub deployment-status evidence. The other three scenario presets are illustrative simulations until their authoritative evidence adapters are implemented and validated.
+The repository contains the shared settlement contract, SDK preparation and transaction helpers, a Reclaim verification backend, persistent replay protection, and a website playground. The live verification code path is limited to Reclaim-backed GitHub deployment-status evidence, but it remains fail-closed until an actual published provider ID/version and matching app credentials are configured and tested. The other three scenario presets are illustrative simulations until their authoritative evidence adapters are implemented and validated.
 
 The contract's release path uses a backend verification signer. It is **backend-attested settlement**, not trustless on-chain verification of external proofs.
 
 ## Repository
 
-- `apps/web`: landing page, use-case modals, guided/developer playground and Reclaim API routes.
+- `apps/web`: locked landing page/playground, an independent `/live` Arc mainnet settlement console, and Reclaim API routes.
 - `packages/sdk`: deterministic payment preparation, amount conversion, viem transaction-call builders and attestation hashing.
 - `packages/conditions`: condition schema, canonicalization, hashing and exact-claim evaluation.
 - `packages/providers`: evidence-provider adapters.
@@ -28,7 +28,9 @@ The contract's release path uses a backend verification signer. It is **backend-
 
 ## Playground
 
-The website playground uses the repository's actual condition canonicalizer and evaluator against editable JSON policy/evidence examples. It supports guided and developer modes and reports policy/evidence errors. It is local simulation only: it does not verify a real provider proof, sign an attestation, connect a wallet or transfer USDC.
+The homepage playground uses the repository's actual condition canonicalizer and evaluator against editable JSON policy/evidence examples. It supports guided and developer modes and reports policy/evidence errors. It is local simulation only: it does not verify a real provider proof, sign an attestation, connect a wallet or transfer USDC.
+
+The separate `/live` route is the actual Arc mainnet flow: a wallet approves the exact Arc USDC ERC-20 amount, funds the shared contract, requests a payment-bound Reclaim proof using the committed GitHub repository/ref/SHA/environment/status, and lets the designated payee submit release once the backend verifies the proof. Approval, funding, release, and expiry refund transactions link to the Arc explorer. The route remains blocked until a real deployed contract and published Reclaim provider/version are configured. Do not claim the flow is live until the full proof-to-release transaction has succeeded on mainnet.
 
 ## Development
 

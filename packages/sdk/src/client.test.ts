@@ -1,9 +1,10 @@
 import { prepareCreatePayment } from "./client.js";
+import { ARC_USDC_ADDRESS } from "./arc.js";
 
 const base = {
   payer:"0x1111111111111111111111111111111111111111" as const,
   payee:"0x2222222222222222222222222222222222222222" as const,
-  token:"0x3333333333333333333333333333333333333333" as const,
+  token:ARC_USDC_ADDRESS,
   amount:"1.5",
   expiry:1_800_000_000,
   condition:{
@@ -16,6 +17,13 @@ const base = {
 };
 
 const prepared = prepareCreatePayment(base);
+let rejectedUnsupportedToken = false;
+try {
+  prepareCreatePayment({ ...base, token: "0x3333333333333333333333333333333333333333" });
+} catch (error) {
+  rejectedUnsupportedToken = error instanceof Error && error.message.includes("Arc USDC only");
+}
+if (!rejectedUnsupportedToken) throw new Error("non-USDC token should be rejected");
 if (!prepared.paymentId.startsWith("0x") || prepared.paymentId.length !== 66) throw new Error("payment id failed");
 if (prepared.conditionHash.length !== 66) throw new Error("condition hash failed");
 

@@ -3,6 +3,7 @@ import test from "node:test";
 import { keccak256, stringToHex } from "viem";
 import {
   ARC_NATIVE_CURRENCY,
+  ARC_USDC_ADDRESS,
   assertFundedPaymentSnapshot,
   SettlementPaymentStateError
 } from "./settlement-chain.ts";
@@ -19,12 +20,14 @@ const conditionHash = keccak256(stringToHex("condition"));
 
 function snapshot(overrides: Partial<{
   expiry: bigint;
+  token: string;
   conditionHash: string;
   providerHash: string;
   status: number;
 }> = {}) {
   return {
     expiry: BigInt(condition.expiresAt),
+    token: ARC_USDC_ADDRESS,
     conditionHash,
     providerHash: keccak256(stringToHex(condition.provider)),
     status: 1,
@@ -44,6 +47,13 @@ test("backend refuses to attest when a payment is absent or not funded", () => {
   assert.throws(
     () => assertFundedPaymentSnapshot(snapshot({status: 0}), condition, conditionHash, now),
     (error: unknown) => error instanceof SettlementPaymentStateError && error.code === "PAYMENT_NOT_FUNDED"
+  );
+});
+
+test("backend refuses to attest if arbitrary ERC-20 token was funded", () => {
+  assert.throws(
+    () => assertFundedPaymentSnapshot(snapshot({token:"0x3333333333333333333333333333333333333333"}), condition, conditionHash, now),
+    (error: unknown) => error instanceof SettlementPaymentStateError && error.code === "PAYMENT_TOKEN_MISMATCH"
   );
 });
 

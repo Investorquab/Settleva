@@ -1,6 +1,7 @@
 import { isAddress, type Address, type Hex } from "viem";
 import type { PreparedCreatePayment } from "./client.js";
 import { toTokenUnits } from "./amount.js";
+import { ARC_USDC_ADDRESS } from "./arc.js";
 
 export const ERC20_APPROVAL_ABI = [
   {
@@ -14,6 +15,13 @@ export const ERC20_APPROVAL_ABI = [
 
 /** ABI surface consumed by the SDK transaction helpers and backend chain checks. */
 export const SETTLEVA_ABI = [
+  {
+    type: "function",
+    name: "ARC_USDC",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
   {
     type: "function",
     name: "createPayment",
@@ -71,12 +79,20 @@ function assertAddress(value: string, name: string): asserts value is Address {
   if (!isAddress(value)) throw new Error(name + " must be a valid EVM address");
 }
 
+function assertArcUsdc(value: string): asserts value is Address {
+  assertAddress(value, "Settlement token");
+  if (value.toLowerCase() !== ARC_USDC_ADDRESS.toLowerCase()) {
+    throw new Error("Settleva only supports Arc USDC (" + ARC_USDC_ADDRESS + ")");
+  }
+}
+
 export function buildApprovalCall(
   prepared: PreparedCreatePayment,
   settlevaAddress: Address,
   tokenDecimals: number
 ) {
   assertAddress(settlevaAddress, "Settleva contract address");
+  assertArcUsdc(prepared.request.token);
   const amount = toTokenUnits(prepared.request.amount, tokenDecimals);
   return {
     address: prepared.request.token,
@@ -92,6 +108,7 @@ export function buildCreatePaymentCall(
   tokenDecimals: number
 ) {
   assertAddress(settlevaAddress, "Settleva contract address");
+  assertArcUsdc(prepared.request.token);
   const amount = toTokenUnits(prepared.request.amount, tokenDecimals);
   return {
     address: settlevaAddress,

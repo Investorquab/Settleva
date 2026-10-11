@@ -4,6 +4,8 @@ import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { hashCondition, type PaymentCondition } from "@settleva/conditions";
 import type { Hex } from "viem";
 import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
+import { buildReclaimProviderParams } from "../../../../lib/reclaim-binding.js";
+import { isGitHubDeploymentCondition } from "@settleva/providers";
 import {
   assertFundedPaymentOnchain,
   SettlementChainConfigurationError,
@@ -12,6 +14,12 @@ import {
 } from "../../../../lib/settlement-chain.js";
 
 export const runtime = "nodejs";
+
+function privateJson(body: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("Cache-Control", "no-store");
+  return NextResponse.json(body, {...init, headers});
+}
 
 function isPaymentCondition(value: unknown): value is PaymentCondition {
   if (!value || typeof value !== "object") return false;
@@ -46,24 +54,33 @@ function isProofContext(value: unknown): value is {paymentId:string;conditionHas
 export async function POST(request: Request) {
   try {
     const body = await request.json() as {context?: unknown;condition?: unknown};
-    if (typeof body.context !== "string") return NextResponse.json({error:"A payment-bound proof context is required."},{status:400});
+    if (typeof body.context !== "string") return privateJson({error:"A payment-bound proof context is required."},{status:400});
 
     let context: {paymentId:string;conditionHash:`0x${string}`};
     try { context = JSON.parse(body.context) as {paymentId:string;conditionHash:`0x${string}`}; }
-    catch { return NextResponse.json({error:"Proof context is not valid JSON."},{status:400}); }
+    catch { return privateJson({error:"Proof context is not valid JSON."},{status:400}); }
 
-    if (!isProofContext(context)) return NextResponse.json({error:"Proof context must bind paymentId and conditionHash."},{status:400});
-    if (!isPaymentCondition(body.condition)) return NextResponse.json({error:"The exact payment condition is required."},{status:400});
+    if (!isProofContext(context)) return privateJson({error:"Proof context must bind paymentId and conditionHash."},{status:400});
+    if (!isPaymentCondition(body.condition)) return privateJson({error:"The exact payment condition is required."},{status:400});
 
     const condition = body.condition;
+    if (!isGitHubDeploymentCondition(condition)) {
+      return privateJson({error:"Only the GitHub deployment-status evidence adapter is enabled for real settlement."},{status:400});
+    }
+    let providerParams: Record<string, string>;
+    try {
+      providerParams = buildReclaimProviderParams(condition);
+    } catch (error) {
+      return privateJson({error:error instanceof Error ? error.message:"GitHub deployment condition is invalid."},{status:400});
+    }
     let computedConditionHash: Hex;
     try {
       computedConditionHash = hashCondition(condition);
     } catch (error) {
-      return NextResponse.json({error:error instanceof Error ? error.message : "Payment condition is invalid."},{status:400});
+      return privateJson({error:error instanceof Error ? error.message : "Payment condition is invalid."},{status:400});
     }
     if (computedConditionHash.toLowerCase() !== context.conditionHash.toLowerCase()) {
-      return NextResponse.json({error:"Payment condition does not match its committed hash."},{status:400});
+      return privateJson({error:"Payment condition does not match its committed hash."},{status:400});
     }
 
     const appId = process.env.RECLAIM_APP_ID;
@@ -71,28 +88,33 @@ export async function POST(request: Request) {
     const providerId = process.env.RECLAIM_PROVIDER_ID;
     const configuredProviderVersion = process.env.RECLAIM_PROVIDER_VERSION;
     if (!appId || !appSecret || !providerId || !configuredProviderVersion) {
-      return NextResponse.json({error:"Reclaim server credentials and the pinned provider version are not configured."},{status:503});
+      return privateJson({error:"Reclaim server credentials and the pinned provider version are not configured."},{status:503});
     }
-    if (condition.provider !== providerId) return NextResponse.json({error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
-    if (condition.providerVersion !== configuredProviderVersion) return NextResponse.json({error:"Payment condition provider version does not match the configured Reclaim provider version."},{status:400});
+    if (condition.provider !== providerId) return privateJson({error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
+    if (condition.providerVersion !== configuredProviderVersion) return privateJson({error:"Payment condition provider version does not match the configured Reclaim provider version."},{status:400});
 
     // Do not start a provider session for a made-up payment ID or a condition
     // that is not the exact commitment locked by the live Arc contract.
     await assertFundedPaymentOnchain(context.paymentId as Hex, condition, context.conditionHash);
 
-    const requestConfig = await ReclaimProofRequest.init(appId,appSecret,providerId,{log:false});
+    const requestConfig = await ReclaimProofRequest.init(appId,appSecret,providerId,{
+      log:false,
+      providerVersion:configuredProviderVersion,
+      useBrowserExtension:false
+    });
     const {providerId:resolvedProviderId,providerVersion} = requestConfig.getProviderVersion();
     if (resolvedProviderId !== providerId || providerVersion !== configuredProviderVersion) {
-      return NextResponse.json({error:"Configured Reclaim provider version does not match the provider version resolved for this request."},{status:503});
+      return privateJson({error:"Configured Reclaim provider version does not match the provider version resolved for this request."},{status:503});
     }
 
     const callbackUrl = process.env.RECLAIM_CALLBACK_URL;
     const databaseUrl = process.env.DATABASE_URL;
     if (!callbackUrl || !databaseUrl) {
-      return NextResponse.json({error:"Production Reclaim callback and replay database configuration are required."},{status:503});
+      return privateJson({error:"Production Reclaim callback and replay database configuration are required."},{status:503});
     }
 
     requestConfig.setAppCallbackUrl(callbackUrl, true);
+    requestConfig.setParams(providerParams);
     requestConfig.setContext(context.paymentId, context.conditionHash);
     const sessionId = requestConfig.getSessionId();
     const statusToken = randomBytes(32).toString("base64url");
@@ -114,7 +136,7 @@ export async function POST(request: Request) {
       await sessions.close();
     }
 
-    return NextResponse.json({
+    return privateJson({
       request:requestConfig.toJsonString(),
       sessionId,
       statusToken,
@@ -125,6 +147,6 @@ export async function POST(request: Request) {
     const status = error instanceof SettlementChainConfigurationError || error instanceof SettlementChainRpcError
       ? 503
       : error instanceof SettlementPaymentStateError ? 409 : 500;
-    return NextResponse.json({error:error instanceof Error ? error.message:"Could not create Reclaim request."},{status});
+    return privateJson({error:error instanceof Error ? error.message:"Could not create Reclaim request."},{status});
   }
 }

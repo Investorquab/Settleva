@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   assertConditionCommitment,
   assertConditionEvaluation,
+  assertProofFreshness,
   assertGitHubDeploymentEvidence,
   assertProofIdentifier,
   assertProviderPin,
@@ -103,4 +104,13 @@ test("callback failure resolution never overwrites a verified session", () => {
   assert.equal(resolveCallbackFailure(false, "pending"), "mark-failed");
   assert.equal(resolveCallbackFailure(false, "failed"), "retry");
   assert.equal(resolveCallbackFailure(false, null), "retry");
+});
+
+
+test("proof freshness accepts recent timestamps and rejects stale or future-dated proofs", () => {
+  assert.doesNotThrow(() => assertProofFreshness(9_995, 10_000, 900, 60));
+  assert.doesNotThrow(() => assertProofFreshness("10060", 10_000, 900, 60));
+  assert.throws(() => assertProofFreshness(9_000, 10_000, 900, 60), /stale/);
+  assert.throws(() => assertProofFreshness(10_061, 10_000, 900, 60), /future/);
+  assert.throws(() => assertProofFreshness("not-a-timestamp", 10_000), /timestampS/);
 });

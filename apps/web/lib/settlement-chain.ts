@@ -8,23 +8,14 @@ import {
   type Hex
 } from "viem";
 import type { PaymentCondition } from "@settleva/conditions";
-import { SETTLEVA_ABI } from "@settleva/sdk";
+import { ARC_MAINNET_CHAIN_ID, ARC_NATIVE_CURRENCY, ARC_USDC_ADDRESS, SETTLEVA_ABI } from "@settleva/sdk";
+export { ARC_NATIVE_CURRENCY };
 
-const ARC_MAINNET_CHAIN_ID = 5042;
-
-/**
- * Arc's native USDC balance uses 18 decimals for gas/native value.
- * The ERC-20 USDC interface remains six-decimal for transfer/allowance amounts.
- * See https://www.arc.io/blog/arc-compatibility-guide-for-existing-evm-apps.
- */
-export const ARC_NATIVE_CURRENCY = {
-  name: "USDC",
-  symbol: "USDC",
-  decimals: 18
-} as const;
+export { ARC_NATIVE_CURRENCY } from "@settleva/sdk";
 
 export interface SettlementPaymentSnapshot {
   readonly expiry: bigint;
+  readonly token: string;
   readonly conditionHash: string;
   readonly providerHash: string;
   readonly status: number;
@@ -46,6 +37,7 @@ export class SettlementChainRpcError extends Error {
 
 export type SettlementPaymentStateErrorCode =
   | "PAYMENT_NOT_FUNDED"
+  | "PAYMENT_TOKEN_MISMATCH"
   | "PAYMENT_EXPIRED"
   | "PAYMENT_EXPIRY_MISMATCH"
   | "PAYMENT_CONDITION_MISMATCH"
@@ -70,6 +62,9 @@ export function assertFundedPaymentSnapshot(
 ): void {
   if (payment.status !== 1) {
     throw new SettlementPaymentStateError("PAYMENT_NOT_FUNDED", "The on-chain payment is not in Funded state.");
+  }
+  if (payment.token.toLowerCase() !== ARC_USDC_ADDRESS.toLowerCase()) {
+    throw new SettlementPaymentStateError("PAYMENT_TOKEN_MISMATCH", "The funded payment does not use Arc USDC.");
   }
   if (payment.conditionHash.toLowerCase() !== expectedConditionHash.toLowerCase()) {
     throw new SettlementPaymentStateError("PAYMENT_CONDITION_MISMATCH", "On-chain condition hash does not match the submitted policy.");
@@ -102,8 +97,8 @@ export async function assertFundedPaymentOnchain(
   if (!configuredChainId || !/^\d+$/.test(configuredChainId) || Number(configuredChainId) !== ARC_MAINNET_CHAIN_ID) {
     throw new SettlementChainConfigurationError("SETTLEVA_CHAIN_ID must be 5042 for Arc mainnet verification.");
   }
-  if (!rpcUrl || !/^https?:\/\//.test(rpcUrl)) {
-    throw new SettlementChainConfigurationError("ARC_RPC_URL must point to the configured Arc mainnet RPC endpoint.");
+  if (!rpcUrl || !/^https:\/\//i.test(rpcUrl)) {
+    throw new SettlementChainConfigurationError("ARC_RPC_URL must be an HTTPS Arc mainnet RPC endpoint.");
   }
   if (!contractAddress || !isAddress(contractAddress)) {
     throw new SettlementChainConfigurationError("SETTLEVA_CONTRACT_ADDRESS must be the deployed Settleva mainnet contract.");
@@ -142,6 +137,7 @@ export async function assertFundedPaymentOnchain(
 
   assertFundedPaymentSnapshot({
     expiry: payment[4],
+    token: payment[2],
     conditionHash: payment[5],
     providerHash: payment[6],
     status: payment[7]

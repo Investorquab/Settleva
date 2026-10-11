@@ -11,7 +11,7 @@ A payment may settle only when evidence satisfies the exact condition committed 
 3. **Condition engine:** canonicalizes versioned policies and evaluates verified claims deterministically. The initial operator set is intentionally limited to exact equality.
 4. **Evidence provider:** obtains claims from a source authoritative for the use case. A successful API response is not automatically cryptographic proof.
 5. **Verification backend:** verifies provider/version and proof data, binds claims to the initiated session and committed context, enforces persistent replay protection, checks the live Arc payment record and signs a settlement attestation.
-6. **Settleva contract on Arc:** one shared contract records each payment, locks the specified ERC-20 token, verifies signed release authorization, enforces expiry/refund rules and prevents proof replay.
+6. **Settleva contract on Arc:** one shared contract records each payment, locks only the canonical Arc USDC ERC-20 interface, verifies signed release authorization, enforces expiry/refund rules and prevents proof replay.
 
 ## Flow
 
@@ -23,7 +23,7 @@ The backend repeats the on-chain payment check at proof request time and immedia
 
 Gaming, freelance milestone, conditional commerce and agentic task payments use the same Settleva contract. Each payment has its own ID, token, amount, expiry, condition hash and provider hash. Different use cases need their own trusted evidence adapters and policies—not a separate contract deployment. USDC is an existing token contract and is not deployed by Settleva.
 
-The currently configured production verifier is for GitHub deployment-status evidence. The other scenario presets in the playground are simulations until corresponding authoritative evidence adapters are implemented.
+The implemented Reclaim verification path is limited to GitHub deployment-status evidence, but it is not production-ready until a real published provider ID/version and matching app credentials have been configured and acceptance-tested. The other scenario presets in the homepage playground are simulations until corresponding authoritative evidence adapters are implemented.
 
 ## Policy and SDK invariants
 
@@ -46,7 +46,7 @@ The currently configured production verifier is for GitHub deployment-status evi
 
 ## Developer experience
 
-The public landing page explains the flow and four use cases. Each use-case card opens a detail modal and can preselect the corresponding playground example. The playground has guided mode and editable JSON policy/evidence. It uses the shared condition canonicalizer and evaluator and cannot create proofs or transactions.
+The approved landing page explains the flow and four use cases. Its guided/developer playground uses the shared condition canonicalizer and evaluator but is simulation-only. The independent `/live` route is the actual wallet path: it checks the deployed USDC allowlist, funds the contract, creates the payment-bound Reclaim request from the committed GitHub deployment values, and permits the payee to submit the attested release or the payer to refund after expiry. A real published provider and deployed server-side configuration are required; the route must not be presented as live until a real proof-to-release transaction succeeds.
 
 ## Production readiness
 

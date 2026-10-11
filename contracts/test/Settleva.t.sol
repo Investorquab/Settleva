@@ -19,6 +19,7 @@ contract MockToken {
 }
 
 contract SettlevaTest is Test {
+    address private constant ARC_USDC = 0x3600000000000000000000000000000000000000;
     Settleva private settleva;
     MockToken private token;
     address private payer = address(0x1);
@@ -33,7 +34,10 @@ contract SettlevaTest is Test {
     function setUp() public {
         signer = vm.addr(signerPk);
         settleva = new Settleva(signer);
-        token = new MockToken();
+        // Install the mock ERC-20 runtime at Arc's canonical USDC interface address.
+        MockToken implementation = new MockToken();
+        vm.etch(ARC_USDC, address(implementation).code);
+        token = MockToken(ARC_USDC);
         token.mint(payer, 1_000_000);
         vm.prank(payer);
         token.approve(address(settleva), 1_000_000);
@@ -65,6 +69,20 @@ contract SettlevaTest is Test {
     function _status(bytes32 id) internal view returns (uint256) {
         (, , , , , , , Settleva.Status status) = settleva.payments(id);
         return uint256(status);
+    }
+
+    function testRejectsNonUsdcToken() public {
+        vm.prank(payer);
+        vm.expectRevert(Settleva.UnsupportedToken.selector);
+        settleva.createPayment(
+            keccak256("unsupported-token-payment"),
+            payee,
+            address(0xBEEF),
+            100_000,
+            uint64(block.timestamp + 1 days),
+            conditionHash,
+            providerHash
+        );
     }
 
     function testCreateLocksFunds() public {

@@ -33,6 +33,8 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --no-frozen-lockfile
+      - name: Verify session/replay schema migration against PostgreSQL
+        run: pnpm --filter @settleva/web db:migrate
       - run: pnpm -r check
       - run: pnpm -r test
       - run: pnpm -r build

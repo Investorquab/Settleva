@@ -7,6 +7,9 @@ import "./ISettlementToken.sol";
 /// @dev Reclaim proof verification and semantic condition evaluation happen off-chain.
 /// The attestation signer is a deliberate trust boundary and must be secured accordingly.
 contract Settleva {
+    /// @notice Canonical ERC-20 interface to Arc's native USDC balance (6 decimals).
+    address public constant ARC_USDC = 0x3600000000000000000000000000000000000000;
+
     enum Status { None, Funded, Released, Refunded }
 
     struct Payment {
@@ -26,6 +29,7 @@ contract Settleva {
 
     error InvalidPayment();
     error InvalidAddress();
+    error UnsupportedToken();
     error InvalidAmount();
     error InvalidExpiry();
     error AlreadyExists();
@@ -59,6 +63,7 @@ contract Settleva {
     ) external {
         if (paymentId == bytes32(0)) revert InvalidPayment();
         if (payee == address(0) || token == address(0)) revert InvalidAddress();
+        if (token != ARC_USDC) revert UnsupportedToken();
         if (amount == 0) revert InvalidAmount();
         if (expiry <= block.timestamp) revert InvalidExpiry();
         if (conditionHash == bytes32(0) || providerHash == bytes32(0)) revert InvalidPayment();

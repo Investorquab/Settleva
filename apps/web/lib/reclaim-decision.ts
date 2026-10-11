@@ -4,6 +4,35 @@ import { parseProofIdentifier } from "./reclaim-binding.ts";
 
 export type VerificationCommitStatus = "committed" | "already-committed" | "conflict";
 
+export const MAX_RECLAIM_PROOF_AGE_SECONDS = 15 * 60;
+export const ALLOWED_RECLAIM_CLOCK_SKEW_SECONDS = 60;
+
+/** Reject stale or future-dated proofs even if their signatures otherwise verify. */
+export function assertProofFreshness(
+  timestampValue: unknown,
+  now = Math.floor(Date.now() / 1000),
+  maxAgeSeconds = MAX_RECLAIM_PROOF_AGE_SECONDS,
+  allowedFutureSkewSeconds = ALLOWED_RECLAIM_CLOCK_SKEW_SECONDS
+): void {
+  const timestamp = typeof timestampValue === "number"
+    ? timestampValue
+    : typeof timestampValue === "string" && /^\d+$/.test(timestampValue)
+      ? Number(timestampValue)
+      : Number.NaN;
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0) {
+    throw new Error("Reclaim proof timestampS must be a positive Unix timestamp in seconds.");
+  }
+  if (!Number.isSafeInteger(now) || !Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds <= 0) {
+    throw new Error("Proof freshness clock configuration is invalid.");
+  }
+  if (timestamp > now + allowedFutureSkewSeconds) {
+    throw new Error("Reclaim proof timestamp is too far in the future.");
+  }
+  if (now - timestamp > maxAgeSeconds) {
+    throw new Error("Reclaim proof is stale; generate a fresh proof.");
+  }
+}
+
 export function assertSingleProof(proofs: readonly unknown[]): unknown {
   if (proofs.length !== 1) throw new Error("Exactly one Reclaim proof is required for this payment condition.");
   return proofs[0];

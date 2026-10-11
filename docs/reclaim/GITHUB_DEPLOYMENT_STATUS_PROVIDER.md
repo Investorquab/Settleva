@@ -43,6 +43,20 @@ For a deployment selected by ref/SHA/environment, GitHub's deployment endpoint s
 6. The proof context must bind the payment id and condition hash.
 7. Provider publication/versioning is a deployment prerequisite; this repository must never invent a provider id or version.
 
+## Runtime parameter binding
+
+The backend derives the exact values from the condition committed at funding and passes them to `ReclaimProofRequest.setParams()`:
+
+| Reclaim parameter | Committed condition field |
+| --- | --- |
+| `github_repo_full_name` | `github.repo.full_name` |
+| `github_deployment_ref` | `github.deployment.ref` |
+| `github_deployment_sha` | `github.deployment.sha` |
+| `github_deployment_environment` | `github.deployment.environment` |
+| `github_deployment_status` | `github.deployment.status` |
+
+The server pins the exact provider ID/version, requests app-secret TEE attestation verification through Reclaim's SDK, rejects proof timestamps older than the freshness window, binds the result to the initiated session/payment/condition, evaluates every committed claim, and only then signs the payment-bound attestation. The real published provider must demonstrably accept these parameter names and return the documented extracted values. Source code does not assume or invent a published provider.
+
 ## Current implementation boundary
 
 This document defines the provider contract and claim schema. It does **not** pretend that the provider has already been published in Reclaim.

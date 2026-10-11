@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "check": "tsc --noEmit --rootDir ../..",
-    "test": "node --test && node --check scripts/mainnet-preflight.mjs",
+    "test": "node --test && node --check scripts/mainnet-preflight.mjs && node --check scripts/migrate-db.mjs",
     "build": "next build",
+    "db:migrate": "node --env-file-if-exists=.env.production scripts/migrate-db.mjs",
     "preflight:mainnet": "node --env-file-if-exists=.env.production scripts/mainnet-preflight.mjs"
   },
   "dependencies": {

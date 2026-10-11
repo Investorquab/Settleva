@@ -2,6 +2,7 @@ import type { PaymentCondition } from "@settleva/conditions";
 import { hashCondition } from "@settleva/conditions";
 import { keccak256, stringToHex } from "viem";
 import { normalizeTokenAmount } from "./amount.js";
+import { ARC_USDC_ADDRESS } from "./arc.js";
 import { derivePaymentId } from "./payment-id.js";
 
 export interface CreatePaymentInput {
@@ -33,6 +34,9 @@ export function prepareCreatePayment(input: CreatePaymentInput): PreparedCreateP
   if (!/^0x[0-9a-fA-F]{40}$/.test(input.payer)) throw new Error("payer must be an EVM address");
   if (!/^0x[0-9a-fA-F]{40}$/.test(input.payee)) throw new Error("payee must be an EVM address");
   if (!/^0x[0-9a-fA-F]{40}$/.test(input.token)) throw new Error("token must be an EVM address");
+  if (input.token.toLowerCase() !== ARC_USDC_ADDRESS.toLowerCase()) {
+    throw new Error("Settleva supports Arc USDC only; token must be " + ARC_USDC_ADDRESS);
+  }
 
   const amount = normalizeTokenAmount(input.amount);
   const conditionHash = hashCondition(input.condition);
