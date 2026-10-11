@@ -75,6 +75,22 @@ test("persistent replay store accepts only one concurrent identical claim", {ski
     };
     assert.equal(await store.claim(ownerBinding), true);
 
+    // All contenders share one proof identifier but use different sessions.
+    // The database-level uniqueness constraint must choose exactly one owner.
+    const sharedProof = `${suffix}-shared-proof-race`;
+    const proofRaceStores = Array.from({length: 12}, () => new PostgresReplayStore(databaseUrl!));
+    try {
+      const results = await Promise.all(proofRaceStores.map((candidate, index) => candidate.claim({
+        sessionId: `${suffix}-proof-race-session-${index}`,
+        proofIdentifier: sharedProof,
+        paymentId: `${suffix}-proof-race-payment-${index}`,
+        conditionHash: `${suffix}-proof-race-condition-${index}`
+      })));
+      assert.equal(results.filter(Boolean).length, 1);
+    } finally {
+      await Promise.all(proofRaceStores.map((candidate) => candidate.close()));
+    }
+
     const conflictedBinding = {
       sessionId: `${suffix}-contended-session`,
       proofIdentifier: ownerBinding.proofIdentifier,

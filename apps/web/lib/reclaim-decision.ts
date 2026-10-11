@@ -93,18 +93,23 @@ export function resolveVerificationCommit(
 
 export type CallbackFailureStatus = "mark-failed" | "already-verified" | "retry";
 
+/**
+ * A pending session may become terminal only after a cryptographically
+ * verified and correctly bound proof has failed the committed claim evaluation.
+ * Parse, SDK, provider, database and chain errors must never poison session state.
+ */
 export function resolveCallbackFailure(
-  retryable: boolean,
+  terminalConditionFailure: boolean,
   currentStatus: "pending" | "verified" | "failed" | null
 ): CallbackFailureStatus {
   if (currentStatus === "verified") return "already-verified";
-  if (retryable || currentStatus !== "pending") return "retry";
-  return "mark-failed";
+  if (terminalConditionFailure && currentStatus === "pending") return "mark-failed";
+  return "retry";
 }
 
 export function shouldMarkCallbackFailed(
-  retryable: boolean,
+  terminalConditionFailure: boolean,
   currentStatus: "pending" | "verified" | "failed" | null
 ): boolean {
-  return resolveCallbackFailure(retryable, currentStatus) === "mark-failed";
+  return resolveCallbackFailure(terminalConditionFailure, currentStatus) === "mark-failed";
 }
