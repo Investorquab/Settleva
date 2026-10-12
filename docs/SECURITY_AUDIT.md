@@ -1,4 +1,4 @@
-# Settleva application security audit
+# Settleva Application Security Review (Static, Not Third-Party Audit)
 
 **Review date:** 11 October 2026  
 **Baseline:** `Investorquab/Settleva` main at `0705c98a6e9d8c8defd8d122578e8cba86c14648`  
@@ -8,7 +8,13 @@
 
 The application-level findings identified in this pass are addressed by the accompanying hardening change and backed by regression/database tests. The tests also surfaced and fixed a PostgreSQL JSONB serialization defect: stored conditions/proofs must round-trip as JSON objects, not JSON strings. There is one authoritative verification-commit path; unverified callback submissions and provider/infrastructure errors cannot permanently fail a pending session; terminal failure requires a Reclaim-verified and correctly bound proof whose extracted claims fail the committed condition. Public endpoints use bounded streamed JSON parsing and no longer echo raw provider/database exception text.
 
-This is not a production-launch certificate. Distributed request-rate and concurrency limits must be configured at the deployed trusted edge/proxy, then validated against the actual hosting configuration. The Reclaim provider ID/version investigation was explicitly excluded from this pass and remains the next task. No live Arc transaction was created by this review.
+This review is not a production-launch certificate or a third-party penetration test. It reflects the Reclaim request/callback/status implementation at the stated baseline, not all subsequent code.
+
+### Scope added after this review
+
+PR #7, merged on 12 October 2026 as `2b698d5e07e4ec9e0955616f4a88c50c55997397`, added `POST /api/evidence/attest`, a source-signed Ed25519 evidence path. The new endpoint has automated tests for signature validation, stale requests, provider pinning, condition integrity and claim-set shape, and the merged main CI passes. However, this earlier static review did **not** independently assess the new endpoint end to end, production key custody, source-event truth guarantees, operational abuse controls, or an actual deployed integration. Those must be included in a focused security review before the source-signed path is enabled for real funds.
+
+Distributed request-rate and concurrency limits must be configured at the deployed trusted edge/proxy, then validated against the actual hosting configuration. The Reclaim provider ID/version investigation was explicitly excluded from the original review and remains open for the `/live` Reclaim path. No live Arc transaction was created by this review.
 
 ## Findings and disposition
 
@@ -34,10 +40,10 @@ This is not a production-launch certificate. Distributed request-rate and concur
 
 ## Operational gates not represented as a code-level pass
 
-1. **Trusted-edge rate limiting:** apply distributed request-rate and concurrency caps to `/api/reclaim/request`, `/api/reclaim/callback`, and `/api/reclaim/readiness`, plus an appropriate limit for `/api/reclaim/status`. The proxy must overwrite/authenticate the client-IP header used by the rule; never trust client-supplied `X-Forwarded-For`. Hosting configuration must be checked before selecting a provider-specific limiter.
+1. **Trusted-edge rate limiting:** apply distributed request-rate and concurrency caps to `/api/reclaim/request`, `/api/reclaim/callback`, `/api/reclaim/readiness`, `/api/reclaim/status`, and `/api/evidence/attest`. The proxy must overwrite/authenticate the client-IP header used by the rule; never trust client-supplied `X-Forwarded-For`. Hosting configuration must be checked before selecting a provider-specific limiter.
 2. **Reclaim provider ID/version:** intentionally excluded from this audit pass. Do not invent or infer these values. The separate investigation must verify a published provider against all five extracted claims.
 3. **Live chain validation:** after the real contract, server environment, callback and database are deployed, run preflight and demonstrate controlled low-value mainnet funding → fresh valid proof → attestation → payee release, plus invalid-proof rejection and payer refund after expiry. Source review and CI do not demonstrate that a deployed financial flow works.
 
 ## CI acceptance
 
-The hardening change must pass frozen-lockfile installation, workspace type checks, unit/integration tests (including PostgreSQL), workspace build, and Arc Foundry contract build/tests. Report the actual CI run; this document alone is not proof that CI or a live deployment succeeded.
+The reviewed Reclaim hardening baseline passed frozen-lockfile installation, workspace type checks, tests (including PostgreSQL), workspace build, and Arc Foundry contract tests. The subsequent signed-evidence addition also passed the merged main CI run [38310472629](https://github.com/Investorquab/Settleva/actions/runs/38310472629). This records test evidence, not an independent security certification or live deployment.

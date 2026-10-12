@@ -44,9 +44,12 @@ The contract trusts the configured backend verification signer. A compromised si
 
 ## 5. Evidence and supported scope
 
-The currently implemented live-provider path is a Reclaim-backed GitHub deployment-status proof. Its exact **published provider ID and version must be supplied and validated at runtime**; placeholders or static/unbound API responses are not acceptable.
+The repository currently has two server-side evidence entry points:
 
-The gaming, freelance, commerce, and agentic examples are illustrative simulations unless a source-specific authoritative proof adapter has been implemented and validated. A successful API response, client JSON, browser boolean, or playground result is not proof. The generic GitHub/HTTP provider classes fail closed until a real verifier path is configured.
+- **Reclaim path:** the separate `/live` console uses a GitHub deployment-status proof. Its exact published provider ID/version and credentials must be supplied and validated at runtime. Placeholders or static/unbound API responses are not acceptable.
+- **Source-signed path:** `POST /api/evidence/attest` verifies a timestamped Ed25519 signature from an authoritative server against an exact provider ID/version and registered public key. It does not have a matching general-purpose `/live` UI, and it requires the source to implement signing and independently establish the truth of the event.
+
+These are integration mechanisms, not the four use cases themselves. Gaming, freelance, commerce and agentic examples remain simulations until real source systems are connected/configured and a low-value Arc funding → evidence → attestation → release test passes. A successful API response, client JSON, browser boolean, or playground result is not proof.
 
 ## 6. Secrets and runtime configuration
 
@@ -69,9 +72,9 @@ A green CI run is code/test evidence, not a production deployment. Before accept
 
 1. The shared contract is deployed to Arc mainnet and its bytecode and immutable signer are checked.
 2. The production backend/database and website are deployed with the exact server-side configuration.
-3. A real published Reclaim provider ID/version is resolved by the SDK and matches server and client configuration.
-4. The repository's mainnet preflight command passes against the actual Arc RPC, USDC contract, Settleva contract, verifier key, Reclaim configuration, and database.
-5. A controlled low-value real payment completes funding -> real Reclaim proof -> backend verification/attestation -> payee release, with the final transaction and state confirmed on Arc.
-6. A nonqualifying/invalid proof does not release funds, and expiry/refund behavior is verified before general launch.
+3. At least one actual authoritative evidence path is configured and validated: either the published, exact-version Reclaim provider used by `/live`, or a source-signed provider with a registered Ed25519 public key and source-side signing implementation. The source-signed API alone is not evidence that any external system is integrated.
+4. The mainnet preflight passes for the Reclaim `/live` path, including Arc RPC, USDC, contract, signer, Reclaim provider, and database. A source-signed-only integration must additionally pass the documented source-specific configuration and acceptance checks.
+5. A controlled low-value real payment completes funding → genuine source evidence → backend verification/attestation → payee release, with the final Arc transaction, state, and USDC balance change confirmed.
+6. Invalid or nonqualifying evidence does not release funds, duplicate/replayed evidence is rejected, and expiry/refund behavior is verified before general launch.
 
 Do not represent simulations, CI's “Record production deployment evidence” job, or a Vercel CI status as proof that the contract or backend has been deployed or that settlement is live.

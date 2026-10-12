@@ -1,3 +1,3 @@
 # Future Ideas
 
-Ideas discovered during implementation that are outside the locked build scope belong here. Do not implement them without an explicit scope decision.
+This file is retained as a compatibility pointer. The canonical planning note is [docs/planning/FUTURE_IDEAS.md](docs/planning/FUTURE_IDEAS.md).

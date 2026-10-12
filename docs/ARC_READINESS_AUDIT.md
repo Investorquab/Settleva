@@ -1,7 +1,7 @@
 # Arc Compatibility & Arc Microgrants Readiness
 
-**Reviewed:** 2026-10-11  
-**Latest source baseline:** `Investorquab/Settleva` `c93fe8acf10e75c52b19a6e6b01e459bd52d6dc6`; follow-up implementation is being validated in CI.  
+**Reviewed:** 2026-10-12  
+**Source baseline:** `Investorquab/Settleva` main at `2b698d5e07e4ec9e0955616f4a88c50c55997397`. Workspace type-check, test suite, production build, PostgreSQL migration validation, and Arc Foundry contract tests passed in [CI run 38310472629](https://github.com/Investorquab/Settleva/actions/runs/38310472629). This is code/test evidence only, not production deployment evidence.  
 **UI protection:** The existing `apps/web/app/page.tsx`, `apps/web/app/globals.css`, and `apps/web/app/layout.tsx` are locked and must stay unchanged without explicit approval.
 
 ## Executive assessment
@@ -41,9 +41,9 @@ Do not substitute `foundryup`: that installs upstream Foundry, not Arc Foundry. 
 
 ## Proof verification and trust boundary
 
-The production adapter is limited to a Reclaim-backed GitHub deployment-status condition with these five claims: repository full name, deployment ref, commit SHA, environment, and status. The backend derives the corresponding dynamic provider parameters only from the condition committed to the escrow, pins the configured provider ID/version, verifies Reclaim proof signatures and app-secret TEE attestation, enforces timestamp freshness, binds context to session/payment/condition, evaluates claims, and uses persistent Postgres replay protection.
+The existing `/live` console's concrete evidence adapter is a Reclaim-backed GitHub deployment-status condition with five claims: repository full name, deployment ref, commit SHA, environment, and status. That path still requires a published, exact-version Reclaim provider validated with real app credentials. PR #7 also added `POST /api/evidence/attest`, a source-signed Ed25519 integration boundary for authoritative server backends. It has automated verification tests but is not a connected live source integration and is not wired into the `/live` UI.
 
-**Unresolved external blocker:** an actual published Reclaim provider ID/version must be configured and tested with the app credentials. The provider must accept the five parameter names documented in `docs/reclaim/SETTLEVA_PROVIDER_SPEC.md`, return the exact extracted fields, and produce a fresh payment-bound proof. A draft or public/static API response is insufficient. The code remains fail-closed until these account-side details are real.
+**Unresolved evidence-source blocker:** the published Reclaim provider ID/version has not been evidenced as validated with real app credentials in this repository review. Its parameter names, extracted fields and payment-bound proof must be tested using the canonical [GitHub Deployment Status Provider guide](reclaim/GITHUB_DEPLOYMENT_STATUS_PROVIDER.md). A draft or public/static API response is insufficient. Alternatively, a source-signed path must register the real source's Ed25519 public key, connect an authoritative source service that signs true outcome events, and pass the equivalent source-specific positive and negative tests. Neither path is production-ready based on the API code alone.
 
 The contract uses backend-attested settlement. It does not verify Reclaim proofs trustlessly on-chain; compromise of the immutable verifier key could authorize invalid release. That boundary must be described plainly in the submission.
 
@@ -77,25 +77,27 @@ Settleva's public repository and intended Arc relevance are in place. The mandat
 | Requirement | Current state |
 |---|---|
 | Arc EVM stack | Appropriate; no rewrite required |
-| Arc Foundry test profile in CI | Implemented; prior Arc Foundry job passed |
+| Arc Foundry test profile in CI | Passed on main in [CI run 38310472629](https://github.com/Investorquab/Settleva/actions/runs/38310472629) |
 | Native/EVM USDC decimal distinction | Corrected: 18 native, 6 ERC-20 |
-| Arc USDC-only contract/SDK/backend guard | Added in this follow-up; verify via CI |
-| Published Reclaim provider and exact version | Not confirmed; launch blocker |
-| Database schema migration and schema-aware preflight | Added in this follow-up; verify via CI and run in production |
-| Website route that supports real wallet flow | Added independently at `/live`; existing homepage files are preserved |
-| Deployed/verified Settleva contract on Arc mainnet | Not yet evidenced |
-| Full real USDC funding → proof → attestation → release | Not yet evidenced |
+| Arc USDC-only contract/SDK/backend guard | Implemented; current main CI passed |
+| Published Reclaim provider and exact version | Not evidenced as validated with real app credentials; blocker for the current `/live` path |
+| Database schema migration and schema-aware preflight | Migration/schema checks passed in CI; production database migration and preflight are still required |
+| `/live` wallet route | Reclaim/GitHub-specific path only; provider and deployment still require validation |
+| Source-signed evidence API | Implemented and CI-tested; authoritative source and public-key registry not evidenced as configured |
+| Deployed/verified Settleva contract on Arc mainnet | Deployment address/transaction and immutable signer verification are not recorded in this repository review |
+| Full real USDC funding → evidence → attestation → release | Not evidenced; remains a launch blocker |
+| Distributed edge rate/concurrency limits | Must be configured and validated at the production hosting edge |
 | Public repository and builder profile | Available |
 | Arc Microgrants submission | Not ready until live settlement evidence exists |
 
 ## Remaining order of operations
 
-1. Ensure this follow-up batch passes the full CI (workspace tests/build and Arc Foundry tests).
+1. Preserve the green main CI baseline ([run 38310472629](https://github.com/Investorquab/Settleva/actions/runs/38310472629)) and continue running it for documentation changes.
 2. Pull locally and run workspace checks; run Arc Foundry tests under WSL as above.
-3. Publish and validate the exact Reclaim provider and app credentials; verify positive and negative proofs.
-4. Deploy one shared contract with separate deployer/verifier keys, verify its code and `ARC_USDC()`/signer getters, then configure the production backend and DB.
-5. Run the DB migration and pass `pnpm --filter @settleva/web preflight:mainnet`.
-6. Complete a controlled low-value mainnet escrow → Reclaim proof → backend attestation → payee release; also verify invalid proof rejection and expiry refund with separate test payments.
-7. Submit the direct deployed `/live` link, repository, and description before the official cutoff.
+3. Choose the first use case and its source of truth. For the existing `/live` console, publish and validate the exact Reclaim provider/version and app credentials. For the source-signed API, connect the real authoritative source backend, register its Ed25519 public key, and run source-specific positive/negative tests.
+4. Deploy one shared contract with separate deployer/verifier keys, verify its bytecode and `ARC_USDC()`/signer getters, then configure the production backend and database.
+5. Apply the production database migration, pass the Reclaim-oriented `pnpm --filter @settleva/web preflight:mainnet` where applicable, and separately validate source-signed configuration.
+6. Complete a controlled low-value mainnet escrow → authoritative evidence → backend attestation → payee release; also verify invalid/replayed evidence rejection and expiry refund with separate test payments.
+7. The Arc Microgrants page currently states that submissions close October 14, 2026 at 23:59 ET; only submit if a working Arc mainnet deployment and real settlement can be demonstrated before that deadline.
 
 This audit records readiness, not deployment evidence.

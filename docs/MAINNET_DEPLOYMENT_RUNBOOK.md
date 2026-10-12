@@ -12,16 +12,15 @@ This is the single operational source of truth for taking Settleva from the curr
 - Arc USDC ERC-20 interface: `0x3600000000000000000000000000000000000000`, six decimals.
 - Arc native USDC for gas: 18 decimals. Do not reuse ERC-20 units for native-value amounts.
 - Release authorizer: immutable `verificationSigner` set by the contract constructor.
-- Asset: only Arc USDC ERC-20 `0x3600000000000000000000000000000000000000` (6 decimals). Arc native USDC for gas uses 18 decimals.
-- Current proof scope: a real, published and pinned Reclaim GitHub deployment-status provider is required. Do not use placeholder IDs or a static/unbound proof.
-- Gaming, freelance, commerce and agentic examples remain playground simulations until source-specific evidence adapters have been implemented and validated.
+- Evidence choices: the current `/live` console uses the Reclaim GitHub deployment-status path; `POST /api/evidence/attest` is a separate server-to-server source-signed path for authoritative systems.
+- Configure and validate at least one authoritative source path for the use case being enabled. Neither path makes the four scenarios automatically live.
 
 ## 1. Pull and validate the code locally
 
 In PowerShell, run the workspace checks:
 
 ```powershell
-Set-Location C:\Users\NEW\Desktop\Settleva
+Set-Location <PATH_TO_SETTLEVA_REPOSITORY>
 git pull --ff-only origin main
 pnpm install --frozen-lockfile
 pnpm check
@@ -41,7 +40,7 @@ On Windows, open Ubuntu under WSL 2. The shared Windows folder appears under `/m
 Inside the Ubuntu/WSL shell:
 
 ```bash
-cd /mnt/c/Users/NEW/Desktop/Settleva/contracts
+cd /mnt/c/path/to/Settleva/contracts
 arc-forge --version
 FOUNDRY_PROFILE=arc arc-forge install foundry-rs/forge-std
 FOUNDRY_PROFILE=arc arc-forge build --sizes
@@ -60,9 +59,13 @@ The deployed contract's signer is immutable. If you lose the key or need to rota
 
 Before broadcasting the deployment, compare the address derived from the server-side verifier key to `VERIFICATION_SIGNER`. They must be identical.
 
-## 3. Confirm Reclaim provider readiness
+## 3. Select and validate the authoritative evidence path
 
-In Reclaim DevTools, confirm that the provider is **published**, the exact provider ID/version is available to the configured app credentials, the proof is dynamically tied to the intended GitHub deployment-status event, and the resulting claims contain the exact fields expected by the Settleva condition. A public/static response, a draft provider, or a proof whose context is not bound to the initiated payment is not sufficient.
+Choose the source for the first production-enabled use case before configuring production. The two paths share the same on-chain payment commitment and settlement attestation, but they have different source prerequisites.
+
+### Reclaim path — used by the current `/live` console
+
+In Reclaim DevTools, confirm that the provider is **published**, the exact provider ID/version is available to the configured app credentials, the proof is dynamically tied to the intended GitHub deployment-status event, and the extracted claims contain the exact fields expected by the Settleva condition. A public/static response, a draft provider, or a proof whose context is not bound to the initiated payment is not sufficient.
 
 Set all four variables to real matching values on the server and browser configuration:
 
@@ -71,7 +74,11 @@ Set all four variables to real matching values on the server and browser configu
 - `NEXT_PUBLIC_RECLAIM_PROVIDER_ID`
 - `NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION`
 
-The mainnet preflight resolves the configured ID/version through the Reclaim SDK and fails if it does not match. If Reclaim has not issued a working published provider ID/version, stop here: the production proof path is not ready.
+The mainnet preflight resolves the configured ID/version through the Reclaim SDK and fails if it does not match. If Reclaim has not issued a working published provider ID/version, the Reclaim `/live` path is not ready; do not replace a real provider with a placeholder.
+
+### Source-signed path — authoritative server-to-server integration
+
+For a source system that can sign its own verified outcome, set `SETTLEVA_SIGNED_EVIDENCE_ADAPTERS` in the backend environment to the actual provider ID/version and its Ed25519 **public** key. The source service must keep its private key in its own secret manager, independently verify the underlying event, and sign the exact request body according to [the signed-evidence integration guide](integrations/SIGNED_EVIDENCE_PROVIDERS.md). This endpoint is not the same flow as the `/live` Reclaim UI and is not a ready-made integration for any scenario. Test positive/negative events, signature failures, timestamp freshness, conflicting replay, on-chain commitment binding, release and refund with the actual source before enabling it.
 
 ## 4. Deploy exactly one shared Settleva contract
 
@@ -80,7 +87,7 @@ Set the deployment RPC and keys in the Ubuntu/WSL environment or your secure sec
 Inside WSL:
 
 ```bash
-cd /mnt/c/Users/NEW/Desktop/Settleva/contracts
+cd /mnt/c/path/to/Settleva/contracts
 export ARC_RPC_URL="https://rpc.mainnet.arc.io"
 read -rsp "Deployer private key: " DEPLOYER_PRIVATE_KEY; echo; export DEPLOYER_PRIVATE_KEY
 read -rsp "Dedicated verifier private key: " SETTLEVA_VERIFIER_PRIVATE_KEY; echo; export SETTLEVA_VERIFIER_PRIVATE_KEY
@@ -109,7 +116,7 @@ Required configuration includes:
 
 - Arc: `ARC_RPC_URL`, `SETTLEVA_CHAIN_ID=5042`, `SETTLEVA_CONTRACT_ADDRESS`, `NEXT_PUBLIC_ARC_RPC_URL`, `NEXT_PUBLIC_ARC_CHAIN_ID=5042`, and matching `NEXT_PUBLIC_SETTLEVA_ADDRESS`.
 - Signing: `SETTLEVA_VERIFIER_PRIVATE_KEY` whose derived address matches the immutable on-chain signer.
-- Reclaim: app ID/secret and the exact published provider ID/version, with public ID/version values matching.
+- Reclaim (required for the current `/live` console): app ID/secret and exact published provider ID/version, with public ID/version values matching. For a source-signed-only integration, configure the signed provider registry/public key instead; do not assume the Reclaim UI or Reclaim preflight supports that flow.
 - Replay protection: a reachable production Postgres `DATABASE_URL`.
 - Callback: `RECLAIM_CALLBACK_URL=https://YOUR_DEPLOYED_DOMAIN/api/reclaim/callback`.
 
@@ -120,11 +127,11 @@ Deploy the backend and website, configure the production callback URL, and confi
 From the repository root in PowerShell, create `apps/web/.env.production` from `apps/web/.env.example` and fill it securely, or inject the same variables through your terminal/secret manager. Then run:
 
 ```powershell
-Set-Location C:\Users\NEW\Desktop\Settleva
+Set-Location <PATH_TO_SETTLEVA_REPOSITORY>
 pnpm --filter @settleva/web preflight:mainnet
 ```
 
-The preflight is read-only against Arc and Reclaim and performs a harmless `SELECT 1` database probe. First apply the schema with `pnpm --filter @settleva/web db:migrate` against the same production database. It checks:
+The preflight is read-only against Arc and Reclaim and performs a harmless `SELECT 1` database probe. It is tailored to the Reclaim-backed `/live` path; it does not by itself preflight or certify a source-signed integration. First apply the schema with `pnpm --filter @settleva/web db:migrate` against the same production database. It checks:
 
 - required env variables have no template values;
 - both RPCs report chain ID 5042;
@@ -150,8 +157,8 @@ Only after the preceding gates pass:
 2. Ensure the payer has enough Arc native USDC to cover gas; native values use 18 decimals while ERC-20 amounts use six.
 3. Approve the deployed Settleva contract for exactly the test amount, then create a payment whose expiry matches `condition.expiresAt` and whose commitment matches the intended policy.
 4. Confirm the funded payment record on Arc before starting the proof session.
-5. Obtain a fresh, genuine Reclaim proof through the deployed callback flow.
-6. Verify the backend accepts only the exact published provider/version and payment-bound context, evaluates the verified claims, and creates one attestation.
+5. Obtain evidence through the chosen source path: either a fresh genuine Reclaim proof through the deployed callback flow, or a timestamped Ed25519-signed event from the registered authoritative source.
+6. Verify the backend accepts only the configured exact provider/version and payment-bound context, evaluates verified claims, enforces replay protection, and creates one attestation.
 7. Have the payee submit `release`; confirm the Arc receipt, `PaymentReleased` event, payee balance change and terminal `Released` state.
 8. Repeat with a nonqualifying or mismatched proof; no attestation/release should occur.
 9. Verify expiry and payer refund behavior on a separate test payment. Do not use the same payment for both settlement and refund checks.
@@ -160,4 +167,4 @@ Keep transaction hashes, contract address, chain ID, test evidence and observed 
 
 ## Launch boundary
 
-The contract can support all four policy families through one shared deployment, but only a scenario with a validated authoritative evidence adapter may be described as production-enabled. The current playground does not move USDC. A passing preflight is necessary, not sufficient, and does not itself perform a deployment.
+The contract can support all four policy families through one shared deployment, but only a scenario with a validated authoritative evidence adapter may be described as production-enabled. The current homepage playground does not move USDC. A passing preflight is necessary, not sufficient, and does not itself perform a deployment. The source-signed endpoint is server-to-server and is not currently wired into the `/live` console's GitHub/Reclaim UX.
