@@ -1,7 +1,7 @@
 import type { Hex } from "viem";
 import type { PaymentCondition } from "@settleva/conditions";
 import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
-import { resolveReclaimEvidenceAdapter } from "./reclaim-adapter-registry.js";
+import { resolveReclaimEvidenceAdapter } from "./reclaim-adapter-registry.ts";
 
 export interface ParsedProofContext {
   readonly paymentId: string;

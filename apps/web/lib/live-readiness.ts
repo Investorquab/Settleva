@@ -1,6 +1,6 @@
 import { getAddress, isAddress } from "viem";
 import { ARC_MAINNET_CHAIN_ID, ARC_USDC_ADDRESS } from "@settleva/sdk";
-import { hasConfiguredReclaimAdapter } from "./reclaim-adapter-registry.js";
+import { hasConfiguredReclaimAdapter } from "./reclaim-adapter-registry.ts";
 
 export interface LiveReadinessConfig {
   readonly arcRpcUrl: string;
