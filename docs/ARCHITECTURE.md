@@ -44,7 +44,9 @@ Example server-side configuration (replace every example identifier and field wi
 
 `requestParameters` maps a condition field to a Reclaim dynamic request parameter; those values are request inputs, not evidence. `claimFields` separately maps provider-extracted response fields to canonical condition fields. The registry rejects reuse of a request parameter as evidence. Each mapping is only as trustworthy as the pinned Reclaim provider definition and its underlying authoritative source; a successful API response, client JSON, browser boolean, or playground result is not proof.
 
-The gaming, freelance, commerce and agentic examples are illustrative simulations unless each has a source-specific authoritative proof adapter that is implemented, reviewed and validated. Adapter mapping tests validate the generic mapping boundary; they do not claim that live integrations for those scenarios exist.
+The source-signed path is separate from Reclaim: `POST /api/evidence/attest` accepts a timestamped Ed25519 signature over the exact raw event body from a server-side authoritative source. It verifies the public key registered for the exact provider ID/version, exact condition/claim fields, funded Arc payment, deployed verifier signer, and PostgreSQL replay binding before issuing the same attestation format. It does not itself submit a release transaction, and it is not connected to the existing `/live` console UI.
+
+The gaming, freelance, commerce and agentic examples remain illustrative until an actual authoritative source is connected, its server-side public key (for the signed path) or published Reclaim provider (for Reclaim) is configured, and positive/negative real-source evidence tests plus a low-value Arc settlement have passed. Mapping tests and source-signature unit tests validate code boundaries only; they do not claim that live integrations for those scenarios exist.
 
 ## Policy and SDK invariants
 

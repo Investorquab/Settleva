@@ -57,11 +57,39 @@ The backend derives the exact values from the condition committed at funding and
 
 The server pins the exact provider ID/version, requests app-secret TEE attestation verification through Reclaim's SDK, rejects proof timestamps older than the freshness window, binds the result to the initiated session/payment/condition, evaluates every committed claim, and only then signs the payment-bound attestation. The real published provider must demonstrably accept these parameter names and return the documented extracted values. Source code does not assume or invent a published provider.
 
+## Payment binding and verification sequence
+
+The funded payment commits to the provider ID, exact provider version, canonical condition hash, provider hash, and payment ID. The Reclaim request context binds the payment ID and condition hash. Context and extracted-parameter data must come from verified Reclaim proof data; browser-submitted claims are not authoritative.
+
+The end-to-end verification sequence is:
+
+1. Start the Reclaim request server-side and pin the exact provider ID/version.
+2. Record the generated Reclaim session ID and create the proof request from the condition committed when the payment was funded.
+3. Generate the proof and verify it server-side using the exact provider ID/version.
+4. Require the verified session ID and payment context to match the initiated session, payment ID, and condition hash.
+5. Extract only cryptographically verified extracted parameters.
+6. Compare all five extracted values with the funded condition.
+7. Apply freshness and persistent replay checks.
+8. Issue the Settleva attestation only after every verification step passes.
+9. The contract verifies the attestation against the chain, deployed contract, payment ID, condition hash, provider hash, and proof identifier.
+10. Only the designated payee can release the funds before expiry.
+
 ## Current implementation boundary
 
-This document defines the provider contract and claim schema. It does **not** pretend that the provider has already been published in Reclaim.
+This document defines the provider contract and claim schema. It does **not** state that the provider has already been published in Reclaim. The real published provider must demonstrably accept the parameter names documented above and return the expected extracted values. Until publication, exact ID/version pinning, and validation with real Reclaim app credentials are complete, the Reclaim path must fail closed.
 
-Until the provider is published and its id/version is configured, the application must fail closed rather than treating a GitHub API response as a verified proof.
+## Provider acceptance tests
+
+Before production use, separately prove rejection for:
+
+- wrong repository, ref, commit SHA, environment, or status;
+- missing claims or claims that do not match the condition;
+- wrong provider ID or version;
+- wrong payment context or Reclaim session;
+- reused proof identifier; and
+- invalid Settleva verification signature.
+
+A published provider ID/version is a prerequisite. Placeholder IDs and public/static API responses are not proof. The application must remain fail-closed until the actual provider's extracted parameters and version are confirmed against this schema.
 
 ## Reclaim publication checklist
 
