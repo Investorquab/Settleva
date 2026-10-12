@@ -23,7 +23,28 @@ The backend repeats the on-chain payment check at proof request time and immedia
 
 Gaming, freelance milestone, conditional commerce and agentic task payments use the same Settleva contract. Each payment has its own ID, token, amount, expiry, condition hash and provider hash. Different use cases need their own trusted evidence adapters and policies—not a separate contract deployment. USDC is an existing token contract and is not deployed by Settleva.
 
-The implemented Reclaim verification path is limited to GitHub deployment-status evidence, but it is not production-ready until a real published provider ID/version and matching app credentials have been configured and acceptance-tested. The other scenario presets in the homepage playground are simulations until corresponding authoritative evidence adapters are implemented.
+The live verification pipeline is provider-neutral. Each payment condition pins the exact Reclaim provider ID and version; a server-side adapter registry maps provider-specific request parameters and extracted fields to the condition’s canonical claim fields. The legacy single-provider GitHub deployment adapter remains available when the condition contains the exact five GitHub deployment claims and its provider ID/version matches `RECLAIM_PROVIDER_ID` and `RECLAIM_PROVIDER_VERSION`. Additional adapters must be explicitly listed in `SETTLEVA_RECLAIM_ADAPTERS` and resolved by exact provider ID/version. Unknown providers, malformed mappings, duplicate canonical claim values, and incomplete evidence fail closed.
+
+Example server-side configuration (replace every example identifier and field with a real, reviewed Reclaim provider definition; this example is not a working provider):
+
+```json
+[
+  {
+    "providerId": "published-reclaim-provider-id",
+    "providerVersion": "1.0.0",
+    "kind": "mapped",
+    "requestParameters": { "order.id": "order_id_input" },
+    "claimFields": {
+      "delivery_status_result": "delivery.status",
+      "order_id_result": "order.id"
+    }
+  }
+]
+```
+
+`requestParameters` maps a condition field to a Reclaim dynamic request parameter; those values are request inputs, not evidence. `claimFields` separately maps provider-extracted response fields to canonical condition fields. The registry rejects reuse of a request parameter as evidence. Each mapping is only as trustworthy as the pinned Reclaim provider definition and its underlying authoritative source; a successful API response, client JSON, browser boolean, or playground result is not proof.
+
+The gaming, freelance, commerce and agentic examples are illustrative simulations unless each has a source-specific authoritative proof adapter that is implemented, reviewed and validated. Adapter mapping tests validate the generic mapping boundary; they do not claim that live integrations for those scenarios exist.
 
 ## Policy and SDK invariants
 

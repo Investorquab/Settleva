@@ -60,7 +60,7 @@ function parsePaymentContext(value: unknown): {paymentId: Hex; conditionHash: He
 
 function checkCondition(value: unknown): PaymentCondition {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("A GitHub deployment condition is required before funding.");
+    throw new Error("A payment condition is required before funding.");
   }
   const condition = value as PaymentCondition;
   if (condition.version !== "1.0" || !Array.isArray(condition.claims)
@@ -154,9 +154,6 @@ export async function POST(request: Request) {
     if (context.conditionHash.toLowerCase() !== expectedConditionHash.toLowerCase()) {
       return privateJson({ready:false,error:"The policy and prepared condition hash do not match."},400);
     }
-    if (condition.provider !== config.reclaimProviderId || condition.providerVersion !== config.reclaimProviderVersion) {
-      return privateJson({ready:false,error:"The committed policy does not use the exact configured Reclaim provider/version."},400);
-    }
     const providerParams = buildReclaimProviderParams(condition);
 
     // Resolve the actual configured provider before any allowance/funding transaction.
@@ -165,11 +162,11 @@ export async function POST(request: Request) {
       reclaimRequest = await ReclaimProofRequest.init(
         config.reclaimAppId,
         config.reclaimAppSecret,
-        config.reclaimProviderId,
-        {log:false, providerVersion:config.reclaimProviderVersion, useBrowserExtension:false}
+        condition.provider,
+        {log:false, providerVersion:condition.providerVersion, useBrowserExtension:false}
       );
       const resolved = reclaimRequest.getProviderVersion();
-      if (resolved.providerId !== config.reclaimProviderId || resolved.providerVersion !== config.reclaimProviderVersion) {
+      if (resolved.providerId !== condition.provider || resolved.providerVersion !== condition.providerVersion) {
         throw new Error("Resolved provider does not match the exact configured pin.");
       }
       reclaimRequest.setParams(providerParams);
@@ -232,15 +229,15 @@ export async function POST(request: Request) {
       chainId:ARC_MAINNET_CHAIN_ID,
       asset:ARC_USDC_ADDRESS,
       contractAddress:config.settlevaContractAddress,
-      providerId:config.reclaimProviderId,
-      providerVersion:config.reclaimProviderVersion
+      providerId:condition.provider,
+      providerVersion:condition.providerVersion
     });
   } catch (error) {
     if (error instanceof JsonRequestBodyError) {
       return privateJson({ready:false,error:error.message},error.status);
     }
     const message = error instanceof Error
-      && /payment commitment|valid JSON|GitHub deployment condition|condition must be valid|must pin a provider/i.test(error.message)
+      && /payment commitment|valid JSON|payment condition|condition must be valid|must pin a provider/i.test(error.message)
       ? error.message
       : "Live settlement readiness could not be completed. Review server configuration and retry.";
     return privateJson({ready:false,error:message},503);

@@ -1,13 +1,11 @@
 import { ReclaimProofRequest, verifyProof } from "@reclaimprotocol/js-sdk";
 import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/conditions";
 import { buildVerificationAttestationHash } from "@settleva/sdk";
-import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
 import { findMatchingVerifiedProofData, PostgresReplayStore } from "@settleva/verification";
 import { getAddress, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
-import { extractedParametersToClaims } from "./reclaim-binding.js";
+import { normalizeReclaimExtractedParameters } from "./reclaim-binding.js";
 import {
   assertConditionCommitment,
-  assertGitHubDeploymentEvidence,
   assertProofFreshness,
   assertProofIdentifier,
   assertProviderPin,
@@ -79,9 +77,6 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const verifyingContract: Address = getAddress(configuredContract);
 
   assertProviderPin(input.condition,input.expectedProviderId,input.expectedProviderVersion);
-  if (!isGitHubDeploymentCondition(input.condition)) {
-    throw new Error("Only GitHub deployment-status proofs are enabled for production settlement.");
-  }
 
   try {
     await assertFundedPaymentOnchain(
@@ -148,12 +143,12 @@ export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): P
   const contextValue = matchingProof?.context?.contextMessage;
   assertVerifiedContextBinding(contextValue,input.expectedConditionHash);
 
-  const claims = extractedParametersToClaims(matchingProof!.extractedParameters!);
-
-  assertGitHubDeploymentEvidence(
-    isGitHubDeploymentCondition(input.condition),
-    Boolean(extractGitHubDeploymentClaims(claims))
-  );
+  let claims;
+  try {
+    claims = normalizeReclaimExtractedParameters(matchingProof!.extractedParameters!,input.condition);
+  } catch {
+    throw new ReclaimVerificationError("PROVIDER","Verified evidence could not be normalized by the registered provider adapter.");
+  }
 
   const evaluation = evaluateClaims(input.condition,claims);
   if (!evaluation.valid) {

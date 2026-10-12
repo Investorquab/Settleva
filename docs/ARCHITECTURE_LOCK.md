@@ -59,7 +59,7 @@ The gaming, freelance, commerce, and agentic examples are illustrative simulatio
 
 ## 7. Locked UI and playground behavior
 
-The landing page and visual system are locked. Do not alter `apps/web/app/page.tsx`, `apps/web/app/globals.css`, or `apps/web/app/layout.tsx` without explicit approval. The standalone `/live` route is additive and has its own CSS module; it must not restyle or replace the approved homepage.
+The landing page and visual system are locked. Do not alter `apps/web/app/page.tsx`, `apps/web/app/globals.css`, or `apps/web/app/layout.tsx` without explicit approval. The standalone `/live` route is additive and has its own CSS module; it must not restyle or replace the approved homepage. Provider-neutral verification work belongs in server-side adapter/verification modules and must not change the four homepage playground scenarios or imply those simulations are live proof integrations.
 
 The homepage playground must use the shared condition canonicalizer and evaluator, allow guided and developer modes, and clearly label all results as simulated. It must not deploy contracts, claim cryptographic proof verification, connect a wallet, or imply that USDC moved. Real wallet transactions belong only in the separate `/live` route, which must display transaction links and backend-attestation trust boundaries.
 

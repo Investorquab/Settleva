@@ -6,7 +6,6 @@ import type { Hex } from "viem";
 import { ReclaimSessionStore } from "../../../../lib/reclaim-session-store.js";
 import { JsonRequestBodyError, readJsonRequestBody } from "../../../../lib/request-body.js";
 import { buildReclaimProviderParams } from "../../../../lib/reclaim-binding.js";
-import { isGitHubDeploymentCondition } from "@settleva/providers";
 import {
   assertFundedPaymentOnchain,
   SettlementChainConfigurationError,
@@ -65,14 +64,11 @@ export async function POST(request: Request) {
     if (!isPaymentCondition(body.condition)) return privateJson({error:"The exact payment condition is required."},{status:400});
 
     const condition = body.condition;
-    if (!isGitHubDeploymentCondition(condition)) {
-      return privateJson({error:"Only the GitHub deployment-status evidence adapter is enabled for real settlement."},{status:400});
-    }
     let providerParams: Record<string, string>;
     try {
       providerParams = buildReclaimProviderParams(condition);
     } catch (error) {
-      return privateJson({error:error instanceof Error ? error.message:"GitHub deployment condition is invalid."},{status:400});
+      return privateJson({error:error instanceof Error ? error.message:"No registered evidence adapter supports this condition."},{status:400});
     }
     let computedConditionHash: Hex;
     try {
@@ -86,13 +82,9 @@ export async function POST(request: Request) {
 
     const appId = process.env.RECLAIM_APP_ID;
     const appSecret = process.env.RECLAIM_APP_SECRET;
-    const providerId = process.env.RECLAIM_PROVIDER_ID;
-    const configuredProviderVersion = process.env.RECLAIM_PROVIDER_VERSION;
-    if (!appId || !appSecret || !providerId || !configuredProviderVersion) {
-      return privateJson({error:"Reclaim server credentials and the pinned provider version are not configured."},{status:503});
-    }
-    if (condition.provider !== providerId) return privateJson({error:"Payment condition provider does not match the configured Reclaim provider."},{status:400});
-    if (condition.providerVersion !== configuredProviderVersion) return privateJson({error:"Payment condition provider version does not match the configured Reclaim provider version."},{status:400});
+    const providerId = condition.provider;
+    const configuredProviderVersion = condition.providerVersion;
+    if (!appId || !appSecret) return privateJson({error:"Reclaim server credentials are not configured."},{status:503});
 
     // Do not start a provider session for a made-up payment ID or a condition
     // that is not the exact commitment locked by the live Arc contract.
