@@ -156,7 +156,7 @@ test("unregistered policy families fail closed before a Reclaim request is creat
     claims: [{field:"milestone.status",operator:"equals" as const,value:"accepted"}],
     expiresAt: Math.floor(Date.now()/1000)+3600
   };
-  assert.throws(() => buildReclaimProviderParams(policy, {}), /No evidence adapter is registered/
+  assert.throws(() => buildReclaimProviderParams(policy, {}), /No evidence adapter is registered/);
 });
 
 
