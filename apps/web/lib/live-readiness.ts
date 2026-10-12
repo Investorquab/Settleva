@@ -1,5 +1,6 @@
 import { getAddress, isAddress } from "viem";
 import { ARC_MAINNET_CHAIN_ID, ARC_USDC_ADDRESS } from "@settleva/sdk";
+import { hasConfiguredReclaimAdapter } from "./reclaim-adapter-registry.js";
 
 export interface LiveReadinessConfig {
   readonly arcRpcUrl: string;
@@ -7,8 +8,8 @@ export interface LiveReadinessConfig {
   readonly verifierPrivateKey: `0x${string}`;
   readonly reclaimAppId: string;
   readonly reclaimAppSecret: string;
-  readonly reclaimProviderId: string;
-  readonly reclaimProviderVersion: string;
+  readonly reclaimProviderId?: string;
+  readonly reclaimProviderVersion?: string;
   readonly callbackUrl: string;
   readonly databaseUrl: string;
 }
@@ -72,14 +73,13 @@ export function validateLiveReadinessEnvironment(
 
   const reclaimAppId = required(env, "RECLAIM_APP_ID");
   const reclaimAppSecret = required(env, "RECLAIM_APP_SECRET");
-  const reclaimProviderId = required(env, "RECLAIM_PROVIDER_ID");
-  const reclaimProviderVersion = required(env, "RECLAIM_PROVIDER_VERSION");
-  if (required(env, "NEXT_PUBLIC_RECLAIM_PROVIDER_ID") !== reclaimProviderId) {
-    throw new LiveReadinessConfigurationError("Public and server Reclaim provider IDs do not match.");
-  }
-  if (required(env, "NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION") !== reclaimProviderVersion) {
-    throw new LiveReadinessConfigurationError("Public and server Reclaim provider versions do not match.");
-  }
+  const reclaimProviderId = env.RECLAIM_PROVIDER_ID?.trim() ? required(env,"RECLAIM_PROVIDER_ID") : undefined;
+  const reclaimProviderVersion = env.RECLAIM_PROVIDER_VERSION?.trim() ? required(env,"RECLAIM_PROVIDER_VERSION") : undefined;
+  if (Boolean(reclaimProviderId) !== Boolean(reclaimProviderVersion)) throw new LiveReadinessConfigurationError("RECLAIM_PROVIDER_ID and RECLAIM_PROVIDER_VERSION must be configured together.");
+  if (reclaimProviderId && reclaimProviderVersion) {
+    if (required(env,"NEXT_PUBLIC_RECLAIM_PROVIDER_ID") !== reclaimProviderId) throw new LiveReadinessConfigurationError("Public and server Reclaim provider IDs do not match.");
+    if (required(env,"NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION") !== reclaimProviderVersion) throw new LiveReadinessConfigurationError("Public and server Reclaim provider versions do not match.");
+  } else if (!hasConfiguredReclaimAdapter(env)) throw new LiveReadinessConfigurationError("Configure a default Reclaim provider pin or an explicit SETTLEVA_RECLAIM_ADAPTERS registry.");
 
   const callbackUrl = required(env, "RECLAIM_CALLBACK_URL");
   let callback: URL;

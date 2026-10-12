@@ -1,6 +1,7 @@
 import type { Hex } from "viem";
 import type { PaymentCondition } from "@settleva/conditions";
 import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";
+import { resolveReclaimEvidenceAdapter } from "./reclaim-adapter-registry.js";
 
 export interface ParsedProofContext {
   readonly paymentId: string;
@@ -61,19 +62,9 @@ export function extractedParametersToClaims(
  * Build exact dynamic parameters from the policy locked on-chain.
  * Values are copied from committed claims; callers cannot supply an unbound URL.
  */
-export function buildReclaimProviderParams(condition: PaymentCondition): Record<string, string> {
-  if (!isGitHubDeploymentCondition(condition)) {
-    throw new Error("Only the GitHub deployment-status proof adapter is enabled for real settlement.");
-  }
-  const claims = extractGitHubDeploymentClaims(condition.claims);
-  if (!claims) {
-    throw new Error("GitHub deployment condition must include repository, ref, commit SHA, environment and status.");
-  }
-  return {
-    github_repo_full_name: claims.repository,
-    github_deployment_ref: claims.ref,
-    github_deployment_sha: claims.sha,
-    github_deployment_environment: claims.environment,
-    github_deployment_status: claims.status
-  };
+export function buildReclaimProviderParams(condition: PaymentCondition, env: Record<string,string|undefined> = process.env): Record<string,string> {
+  return resolveReclaimEvidenceAdapter(condition,env).buildProviderParams(condition);
+}
+export function normalizeReclaimExtractedParameters(extractedParameters: Record<string,unknown>, condition: PaymentCondition, env: Record<string,string|undefined> = process.env): VerifiedClaim[] {
+  return resolveReclaimEvidenceAdapter(condition,env).normalizeClaims(extractedParameters,condition);
 }

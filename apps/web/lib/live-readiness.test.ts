@@ -112,3 +112,25 @@ test("web environment template leaves deployment secrets and unknown live resour
     assert.equal(envExample.get(name), "", `${name} must not imply a working production value`);
   }
 });
+
+
+test("readiness supports an explicit provider registry without a single default provider pin", () => {
+  const {
+    RECLAIM_PROVIDER_ID: _providerId,
+    RECLAIM_PROVIDER_VERSION: _providerVersion,
+    NEXT_PUBLIC_RECLAIM_PROVIDER_ID: _publicProviderId,
+    NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION: _publicProviderVersion,
+    ...otherEnv
+  } = validEnv;
+  const env = {
+    ...otherEnv,
+    SETTLEVA_RECLAIM_ADAPTERS: JSON.stringify([{
+      providerId:"delivery-provider", providerVersion:"3", kind:"mapped",
+      requestParameters:{"order.id":"order_id_input"},
+      claimFields:{"delivery_status_result":"delivery.status","order_id_result":"order.id"}
+    }])
+  };
+  const config = validateLiveReadinessEnvironment(env);
+  assert.equal(config.reclaimProviderId, undefined);
+  assert.equal(config.reclaimProviderVersion, undefined);
+});

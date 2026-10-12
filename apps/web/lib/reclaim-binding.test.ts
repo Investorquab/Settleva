@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   buildReclaimProviderParams,
   extractedParametersToClaims,
+  normalizeReclaimExtractedParameters,
   parseProofContext,
   parseProofIdentifier
 } from "./reclaim-binding.ts";
@@ -138,7 +139,7 @@ test("Reclaim request params derive from the five committed GitHub deployment cl
     ],
     expiresAt: Math.floor(Date.now()/1000)+3600
   };
-  assert.deepEqual(buildReclaimProviderParams(policy), {
+  assert.deepEqual(buildReclaimProviderParams(policy, {RECLAIM_PROVIDER_ID:"published-provider",RECLAIM_PROVIDER_VERSION:"1.0.0"}), {
     github_repo_full_name:"Investorquab/Settleva",
     github_deployment_ref:"main",
     github_deployment_sha:"6dd48e33fa2dada31d33dd77c8294c61987e81d9",
@@ -147,7 +148,7 @@ test("Reclaim request params derive from the five committed GitHub deployment cl
   });
 });
 
-test("unsupported policy families cannot be sent to the production Reclaim adapter", () => {
+test("unregistered policy families fail closed before a Reclaim request is created", () => {
   const policy = {
     version: "1.0" as const,
     provider: "settleva.demo.milestone",
@@ -155,5 +156,99 @@ test("unsupported policy families cannot be sent to the production Reclaim adapt
     claims: [{field:"milestone.status",operator:"equals" as const,value:"accepted"}],
     expiresAt: Math.floor(Date.now()/1000)+3600
   };
-  assert.throws(() => buildReclaimProviderParams(policy), /GitHub deployment-status/);
+  assert.throws(() => buildReclaimProviderParams(policy, {}), /No evidence adapter is registered/
+});
+
+
+test("registered Reclaim adapters map gaming, freelance, commerce and agentic conditions without hardcoding one scenario", () => {
+  const cases: Array<{
+    id: string;
+    providerId: string;
+    providerVersion: string;
+    claims: Array<{field:string;operator:"equals";value:string}>;
+    requestParameters: Record<string,string>;
+    claimFields: Record<string,string>;
+    extracted: Record<string,string>;
+  }> = [
+    {
+      id: "gaming", providerId: "game-provider", providerVersion: "1",
+      claims: [
+        {field:"game.achievement.status",operator:"equals",value:"verified"},
+        {field:"game.player.id",operator:"equals",value:"player_01"}
+      ],
+      requestParameters: {"game.player.id":"player_id_input"},
+      claimFields: {"achievement_status_result":"game.achievement.status","player_id_result":"game.player.id"},
+      extracted: {achievement_status_result:"verified",player_id_result:"player_01"}
+    },
+    {
+      id: "freelance", providerId: "milestone-provider", providerVersion: "2",
+      claims: [
+        {field:"milestone.status",operator:"equals",value:"accepted"},
+        {field:"milestone.jobId",operator:"equals",value:"job_204"}
+      ],
+      requestParameters: {"milestone.jobId":"job_id_input"},
+      claimFields: {"milestone_status_result":"milestone.status","job_id_result":"milestone.jobId"},
+      extracted: {milestone_status_result:"accepted",job_id_result:"job_204"}
+    },
+    {
+      id: "commerce", providerId: "delivery-provider", providerVersion: "3",
+      claims: [
+        {field:"delivery.status",operator:"equals",value:"confirmed"},
+        {field:"order.id",operator:"equals",value:"order_581"}
+      ],
+      requestParameters: {"order.id":"order_id_input"},
+      claimFields: {"delivery_status_result":"delivery.status","order_id_result":"order.id"},
+      extracted: {delivery_status_result:"confirmed",order_id_result:"order_581"}
+    },
+    {
+      id: "agents", providerId: "agent-provider", providerVersion: "4",
+      claims: [
+        {field:"task.status",operator:"equals",value:"completed"},
+        {field:"evaluation.result",operator:"equals",value:"passed"}
+      ],
+      requestParameters: {},
+      claimFields: {"task_status_result":"task.status","evaluation_result":"evaluation.result"},
+      extracted: {task_status_result:"completed",evaluation_result:"passed"}
+    }
+  ];
+
+  const env = {
+    SETTLEVA_RECLAIM_ADAPTERS: JSON.stringify(cases.map((item) => ({
+      providerId:item.providerId, providerVersion:item.providerVersion, kind:"mapped",
+      requestParameters:item.requestParameters, claimFields:item.claimFields
+    })))
+  };
+
+  for (const scenario of cases) {
+    const policy = {
+      version:"1.0" as const,
+      provider:scenario.providerId,
+      providerVersion:scenario.providerVersion,
+      claims:scenario.claims,
+      expiresAt:Math.floor(Date.now()/1000)+3600
+    };
+    const params = buildReclaimProviderParams(policy, env);
+    for (const parameterName of Object.values(scenario.requestParameters)) {
+      assert.ok(Object.hasOwn(params, parameterName), scenario.id + " maps its committed request parameter");
+    }
+    assert.deepEqual(
+      normalizeReclaimExtractedParameters(scenario.extracted, policy, env),
+      scenario.claims.map((claim) => ({field:claim.field,value:claim.value}))
+    );
+  }
+});
+
+test("mapped adapters cannot reuse a dynamic request parameter as evidence", () => {
+  const policy = {
+    version:"1.0" as const, provider:"unsafe-provider", providerVersion:"1",
+    claims:[{field:"order.id",operator:"equals" as const,value:"order_581"}],
+    expiresAt:Math.floor(Date.now()/1000)+3600
+  };
+  const env = {
+    SETTLEVA_RECLAIM_ADAPTERS: JSON.stringify([{
+      providerId:"unsafe-provider", providerVersion:"1", kind:"mapped",
+      requestParameters:{"order.id":"order_id"}, claimFields:{"order_id":"order.id"}
+    }])
+  };
+  assert.throws(() => buildReclaimProviderParams(policy, env), /cannot treat a dynamic request parameter as verified evidence/);
 });
