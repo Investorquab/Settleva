@@ -1,3 +1,4 @@
+/* Archived GitHub/Reclaim experiment source. Original path: packages/providers/src/github-deployment.test.ts. */
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {

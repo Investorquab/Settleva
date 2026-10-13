@@ -1,3 +1,4 @@
+/* Archived GitHub/Reclaim experiment source. Original path: packages/providers/src/github-deployment.ts. */
 import type { ConditionClaim, PaymentCondition } from "@settleva/conditions";
 
 export const GITHUB_DEPLOYMENT_CLAIM_FIELDS = {

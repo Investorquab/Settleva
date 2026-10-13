@@ -1,170 +1,117 @@
 # Arc Mainnet Deployment Runbook
 
-This is the single operational source of truth for taking Settleva from the current repository state to a controlled Arc mainnet settlement. Complete it in order; do not treat a green CI status, Vercel status check, or playground simulation as a deployment.
+This runbook is for a controlled Settleva demo deployment and for integrators deploying their own instance. Do not treat a green CI run, a hosting status, or a playground simulation as a deployment or real settlement.
 
-## Current starting point
+## Product and deployment model
 
-- Repository branch: `main`.
-- Shared Solidity implementation: `contracts/src/Settleva.sol`.
-- Chain: Arc mainnet, ID `5042`.
-- RPC: `https://rpc.mainnet.arc.io`.
-- Explorer: `https://explorer.arc.io`.
-- Arc USDC ERC-20 interface: `0x3600000000000000000000000000000000000000`, six decimals.
-- Arc native USDC for gas: 18 decimals. Do not reuse ERC-20 units for native-value amounts.
-- Release authorizer: immutable `verificationSigner` set by the contract constructor.
-- Evidence choices: the current `/live` console uses the Reclaim GitHub deployment-status path; `POST /api/evidence/attest` is a separate server-to-server source-signed path for authoritative systems.
-- Configure and validate at least one authoritative source path for the use case being enabled. Neither path makes the four scenarios automatically live.
+- Settleva is developer infrastructure. The SDK and reusable Solidity implementation are the product.
+- Keep one canonical Settleva.sol implementation in the repository.
+- The demo uses its own deployment and verifier. External developers may deploy their own instance and select their own verification signer.
+- A new payment has its own condition and payment fields; creating a new payment does not require redeployment. The current contract does not edit already-funded payment terms in place.
+- The website playground is simulation-only. There is no separate live transaction page in the V1 product.
+- Reclaim/GitHub proof is deferred under future-integrations/reclaim. The source-signed endpoint is a general server-to-server integration boundary, not four preconnected scenario integrations.
 
-## 1. Pull and validate the code locally
+## Arc assumptions
 
-In PowerShell, run the workspace checks:
+- Chain ID: 5042.
+- RPC: https://rpc.mainnet.arc.io.
+- Explorer: https://explorer.arc.io.
+- Arc USDC ERC-20 interface: 0x3600000000000000000000000000000000000000, six decimals.
+- Native Arc USDC value/gas uses 18 decimals. ERC-20 escrow amounts use six.
+- Use Circle's Arc Foundry, not upstream Foundry, for Arc-specific contract build and tests: https://github.com/circlefin/arc-foundry.
 
-```powershell
-Set-Location <PATH_TO_SETTLEVA_REPOSITORY>
-git pull --ff-only origin main
-pnpm install --frozen-lockfile
-pnpm check
-pnpm test
-pnpm build
-```
+## 1. Validate code before deployment
 
-For Solidity, use **Circle's Arc Foundry**, not the standard `foundryup` installation. Official instructions and signed/checksummed releases are at:
+From a clean checkout, run:
 
-- https://github.com/circlefin/arc-foundry
-- https://github.com/circlefin/arc-foundry/releases
+    pnpm install --frozen-lockfile
+    pnpm check
+    pnpm test
+    pnpm build
 
-Arc Foundry's official README explicitly warns against using the upstream `foundry-rs/foundry-toolchain` action to test Arc contracts because it executes with Ethereum rules. This repository's CI pins Arc Foundry and sets `FOUNDRY_PROFILE=arc`.
+Inside contracts/ in Ubuntu/WSL with Circle's Arc Foundry installed:
 
-On Windows, open Ubuntu under WSL 2. The shared Windows folder appears under `/mnt/c`. For the x86-64 Ubuntu/WSL binary, Arc Foundry's documented release artifact is `arc-foundry-v0.8.0-2-x86_64-unknown-linux-gnu.tar.gz`. Verify its checksum before extracting, and put the extracted tools on PATH as `arc-forge`, `arc-cast`, and `arc-anvil`. Do not run `foundryup` as a substitute for Arc Foundry.
+    FOUNDRY_PROFILE=arc arc-forge build --sizes
+    FOUNDRY_PROFILE=arc arc-forge test -vvv
 
-Inside the Ubuntu/WSL shell:
+Do not broadcast a deployment if any repository checks or Arc contract tests fail. CI validates the code revision it ran against; it does not deploy the website, database, backend or contract.
 
-```bash
-cd /mnt/c/path/to/Settleva/contracts
-arc-forge --version
-FOUNDRY_PROFILE=arc arc-forge install foundry-rs/forge-std
-FOUNDRY_PROFILE=arc arc-forge build --sizes
-FOUNDRY_PROFILE=arc arc-forge test -vvv
-```
+## 2. Deploy an integrator-owned instance
 
-A green upstream Foundry run alone is not an Arc-compatibility result. Arc Foundry can also start a local Arc execution environment with `arc-anvil --network arc`; its default test accounts are public, must never hold real funds, and are only for development. See the official README for forking and hardfork options.
+The current contract's verificationSigner is immutable. Select the demo verifier before deployment. Use a separate deployment wallet and verifier key. Do not send keys in chat or commit them to source control.
 
-Do not proceed if workspace checks or Arc Foundry tests fail. The CI evidence record is metadata only; it does **not** deploy the website, backend or contract.
+In WSL, from contracts/, prompt for the private keys without echoing them:
 
-## 2. Create and custody the verifier key
+    export ARC_RPC_URL="https://rpc.mainnet.arc.io"
+    read -rsp "Deployer private key: " DEPLOYER_PRIVATE_KEY; echo; export DEPLOYER_PRIVATE_KEY
+    read -rsp "Dedicated verifier private key: " SETTLEVA_VERIFIER_PRIVATE_KEY; echo; export SETTLEVA_VERIFIER_PRIVATE_KEY
+    export VERIFICATION_SIGNER="$(arc-cast wallet address --private-key "$SETTLEVA_VERIFIER_PRIVATE_KEY")"
+    FOUNDRY_PROFILE=arc arc-forge script script/Deploy.s.sol:DeploySettleva --rpc-url "$ARC_RPC_URL" -vvvv
 
-Use a dedicated signer key that is not your deployer key and is not used for normal wallet funds. Generate it with a trusted wallet tool on a secure device. Record its address as `VERIFICATION_SIGNER` for deployment, and make the corresponding private key available only as the server-side `SETTLEVA_VERIFIER_PRIVATE_KEY` secret.
+This is the dry run. Confirm chain ID 5042, contract constructor signer, and deployer gas balance. Only then repeat with --broadcast. Save the deployment transaction hash and contract address. The verifier private key belongs only in the server-side environment for that instance; the browser and SDK never need it.
 
-The deployed contract's signer is immutable. If you lose the key or need to rotate it, the current contract cannot be updated to use a new signer; a replacement contract and migration plan are required. Never commit keys, put them in `NEXT_PUBLIC_*` variables, or send them in chat.
+Verify the deployed result:
 
-Before broadcasting the deployment, compare the address derived from the server-side verifier key to `VERIFICATION_SIGNER`. They must be identical.
+    arc-cast chain-id --rpc-url "$ARC_RPC_URL"
+    arc-cast code 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS --rpc-url "$ARC_RPC_URL"
+    arc-cast call 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS "verificationSigner()(address)" --rpc-url "$ARC_RPC_URL"
+    arc-cast call 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS "ARC_USDC()(address)" --rpc-url "$ARC_RPC_URL"
 
-## 3. Select and validate the authoritative evidence path
+The returned signer must match the address derived from the server verifier key, and ARC_USDC must match the canonical Arc USDC ERC-20 interface.
 
-Choose the source for the first production-enabled use case before configuring production. The two paths share the same on-chain payment commitment and settlement attestation, but they have different source prerequisites.
+## 3. Configure the demo backend
 
-### Reclaim path — used by the current `/live` console
+Set server-side environment variables in the hosting provider or an untracked local apps/web/.env.production file. Use apps/web/.env.example as the inventory. Never expose server secrets through NEXT_PUBLIC variables.
 
-In Reclaim DevTools, confirm that the provider is **published**, the exact provider ID/version is available to the configured app credentials, the proof is dynamically tied to the intended GitHub deployment-status event, and the extracted claims contain the exact fields expected by the Settleva condition. A public/static response, a draft provider, or a proof whose context is not bound to the initiated payment is not sufficient.
+Required settings include:
 
-Set all four variables to real matching values on the server and browser configuration:
+- ARC_RPC_URL and NEXT_PUBLIC_ARC_RPC_URL, both using HTTPS.
+- SETTLEVA_CHAIN_ID=5042 and NEXT_PUBLIC_ARC_CHAIN_ID=5042.
+- SETTLEVA_CONTRACT_ADDRESS and NEXT_PUBLIC_SETTLEVA_ADDRESS, matching the deployed instance.
+- SETTLEVA_VERIFIER_PRIVATE_KEY, whose address must match the deployed immutable verificationSigner.
+- DATABASE_URL for durable replay protection.
+- SETTLEVA_SIGNED_EVIDENCE_ADAPTERS only when a real authoritative source backend is configured and its Ed25519 public key is registered.
 
-- `RECLAIM_PROVIDER_ID`
-- `RECLAIM_PROVIDER_VERSION`
-- `NEXT_PUBLIC_RECLAIM_PROVIDER_ID`
-- `NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION`
+Do not configure Reclaim variables for V1. The retired Reclaim API routes return a deferred response.
 
-The mainnet preflight resolves the configured ID/version through the Reclaim SDK and fails if it does not match. If Reclaim has not issued a working published provider ID/version, the Reclaim `/live` path is not ready; do not replace a real provider with a placeholder.
+Apply the database migration:
 
-### Source-signed path — authoritative server-to-server integration
+    pnpm --filter @settleva/web db:migrate
 
-For a source system that can sign its own verified outcome, set `SETTLEVA_SIGNED_EVIDENCE_ADAPTERS` in the backend environment to the actual provider ID/version and its Ed25519 **public** key. The source service must keep its private key in its own secret manager, independently verify the underlying event, and sign the exact request body according to [the signed-evidence integration guide](integrations/SIGNED_EVIDENCE_PROVIDERS.md). This endpoint is not the same flow as the `/live` Reclaim UI and is not a ready-made integration for any scenario. Test positive/negative events, signature failures, timestamp freshness, conflicting replay, on-chain commitment binding, release and refund with the actual source before enabling it.
+Then run the read-only preflight:
 
-## 4. Deploy exactly one shared Settleva contract
+    pnpm --filter @settleva/web preflight:mainnet
 
-Set the deployment RPC and keys in the Ubuntu/WSL environment or your secure secret manager. Do not paste secrets into source control, a browser variable, or chat, and avoid literal private-key assignments in shell commands saved to history.
+The preflight checks chain IDs, matching contract address configuration, Arc RPC connectivity, USDC bytecode and decimals, deployed contract bytecode and signer, and the provider-neutral evidence replay schema. Passing preflight is not evidence that an external source is connected or that a payment settled.
 
-Inside WSL:
+## 4. Connect a real source before claiming a live settlement
 
-```bash
-cd /mnt/c/path/to/Settleva/contracts
-export ARC_RPC_URL="https://rpc.mainnet.arc.io"
-read -rsp "Deployer private key: " DEPLOYER_PRIVATE_KEY; echo; export DEPLOYER_PRIVATE_KEY
-read -rsp "Dedicated verifier private key: " SETTLEVA_VERIFIER_PRIVATE_KEY; echo; export SETTLEVA_VERIFIER_PRIVATE_KEY
-export VERIFICATION_SIGNER="$(arc-cast wallet address --private-key "$SETTLEVA_VERIFIER_PRIVATE_KEY")"
-printf "Verifier address: %s\\n" "$VERIFICATION_SIGNER"
-FOUNDRY_PROFILE=arc arc-forge script script/Deploy.s.sol:DeploySettleva --rpc-url "$ARC_RPC_URL" --broadcast -vvvv
-```
+A production settlement requires an authoritative source that the integrator controls or explicitly trusts. The source must establish the real outcome, bind it to the condition committed when the payment was funded, resist replay and authorize only the exact settlement.
 
-The deploy script refuses to broadcast unless the connected chain reports ID `5042`, checks `SETTLEVA_VERIFIER_PRIVATE_KEY` derives exactly `VERIFICATION_SIGNER`, and requires deployer/verifier keys to be different. Supply both securely in WSL or a secret manager, never in source control or chat. Save the deployment transaction hash and deployed contract address from the Arc Foundry output. Do not deploy a separate contract per use case.
+The generic source-signed endpoint at POST /api/evidence/attest accepts a source-server Ed25519 signature and issues the backend attestation after validating configuration, the condition and funded on-chain payment. It does not itself submit a release transaction, and it is not a preconfigured integration for gaming, freelance, commerce or agentic systems.
 
-Verify the result before configuring the app:
+The four website scenarios remain sample policy simulations unless their actual authoritative sources are connected and tested. Do not treat browser-provided JSON, a successful HTTP response, a local playground match or an archived Reclaim proof flow as production evidence.
 
-```bash
-arc-cast chain-id --rpc-url "$ARC_RPC_URL"
-arc-cast code 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS --rpc-url "$ARC_RPC_URL"
-arc-cast call 0xYOUR_DEPLOYED_SETTLEVA_ADDRESS "verificationSigner()(address)" --rpc-url "$ARC_RPC_URL"
-```
+## 5. End-to-end acceptance gate
 
-Confirm bytecode exists and the returned signer equals the address derived from `SETTLEVA_VERIFIER_PRIVATE_KEY`. Record the deployment address and transaction in the deployment notes.
+Only after deployment, configuration and source validation:
 
-## 5. Configure and deploy the web/backend environment
+1. Use dedicated payer and payee wallets and a minimal amount of Arc USDC.
+2. Confirm payer gas balance, remembering native values use 18 decimals and ERC-20 transfers use six.
+3. Approve the deployed contract for the exact test amount and create a payment with expiry equal to the committed condition expiry.
+4. Confirm the funded payment record on Arc.
+5. Obtain a genuine outcome from the configured authoritative source and pass it through the trusted verifier backend.
+6. Confirm that the verifier issues a payment-bound attestation only after source validation and replay protection.
+7. Have the designated payee submit release; record the transaction hash, PaymentReleased event, terminal status and balance change.
+8. Test nonqualifying evidence, invalid signatures, mismatched conditions and replay attempts; they must not release funds.
+9. Separately test expiry and payer refund behavior on a different payment.
 
-Set production variables in the hosting provider's **server-side** environment settings. Use `apps/web/.env.example` as the variable inventory, but replace every template value. The local preflight command reads an optional untracked `apps/web/.env.production`; this file must never be committed.
+If the actual source-to-attestation-to-release sequence cannot complete, do not claim production-enabled conditional settlement. Keep the remaining scenarios labelled as simulations.
 
-Required configuration includes:
+## Package release gate
 
-- Arc: `ARC_RPC_URL`, `SETTLEVA_CHAIN_ID=5042`, `SETTLEVA_CONTRACT_ADDRESS`, `NEXT_PUBLIC_ARC_RPC_URL`, `NEXT_PUBLIC_ARC_CHAIN_ID=5042`, and matching `NEXT_PUBLIC_SETTLEVA_ADDRESS`.
-- Signing: `SETTLEVA_VERIFIER_PRIVATE_KEY` whose derived address matches the immutable on-chain signer.
-- Reclaim (required for the current `/live` console): app ID/secret and exact published provider ID/version, with public ID/version values matching. For a source-signed-only integration, configure the signed provider registry/public key instead; do not assume the Reclaim UI or Reclaim preflight supports that flow.
-- Replay protection: a reachable production Postgres `DATABASE_URL`.
-- Callback: `RECLAIM_CALLBACK_URL=https://YOUR_DEPLOYED_DOMAIN/api/reclaim/callback`.
+The SDK and conditions packages are prepared for public npm publication but are not installable from npm until the package owner publishes both. Run the workspace checks first, then publish @settleva/conditions followed by @settleva/sdk using the instructions in packages/sdk/README.md. Registry publication requires the package owner's npm authorization.
 
-Deploy the backend and website, configure the production callback URL, and confirm the deployed service has the same values. A local env file is useful for preflight but does not configure Vercel or any other host.
+## Submission evidence
 
-## 6. Run the machine-checkable mainnet preflight
-
-From the repository root in PowerShell, create `apps/web/.env.production` from `apps/web/.env.example` and fill it securely, or inject the same variables through your terminal/secret manager. Then run:
-
-```powershell
-Set-Location <PATH_TO_SETTLEVA_REPOSITORY>
-pnpm --filter @settleva/web preflight:mainnet
-```
-
-The preflight is read-only against Arc and Reclaim and performs a harmless `SELECT 1` database probe. It is tailored to the Reclaim-backed `/live` path; it does not by itself preflight or certify a source-signed integration. First apply the schema with `pnpm --filter @settleva/web db:migrate` against the same production database. It checks:
-
-- required env variables have no template values;
-- both RPCs report chain ID 5042;
-- browser/server chain IDs and contract addresses agree;
-- Arc USDC bytecode exists and reports six ERC-20 decimals;
-- the deployed Settleva contract has bytecode and `ARC_USDC()` returns the canonical Arc USDC address;
-- the server verifier key matches the contract's immutable `verificationSigner`;
-- the Reclaim SDK resolves the exact configured provider ID/version;
-- the replay/session database accepts a query; and
-- the callback is HTTPS and points at `/api/reclaim/callback`.
-
-Do not launch if any check fails. This preflight validates configuration and infrastructure; it cannot substitute for a real proof or real token transfer.
-
-## Pre-funding readiness gate
-
-The live console calls `POST /api/reclaim/readiness` before asking for either an ERC-20 approval or funding transaction. It validates the exact condition and payment commitment, Reclaim provider resolution/params, live contract bytecode, immutable signer, Arc USDC address/decimals, callback and PostgreSQL session/replay schema. A failed readiness check prevents wallet transactions. This does not replace manual `preflight:mainnet` or the real proof-to-release acceptance test.
-
-## 7. Controlled real-funds acceptance test
-
-Only after the preceding gates pass:
-
-1. Use a dedicated payer and payee wallet, and a minimal amount of Arc USDC.
-2. Ensure the payer has enough Arc native USDC to cover gas; native values use 18 decimals while ERC-20 amounts use six.
-3. Approve the deployed Settleva contract for exactly the test amount, then create a payment whose expiry matches `condition.expiresAt` and whose commitment matches the intended policy.
-4. Confirm the funded payment record on Arc before starting the proof session.
-5. Obtain evidence through the chosen source path: either a fresh genuine Reclaim proof through the deployed callback flow, or a timestamped Ed25519-signed event from the registered authoritative source.
-6. Verify the backend accepts only the configured exact provider/version and payment-bound context, evaluates verified claims, enforces replay protection, and creates one attestation.
-7. Have the payee submit `release`; confirm the Arc receipt, `PaymentReleased` event, payee balance change and terminal `Released` state.
-8. Repeat with a nonqualifying or mismatched proof; no attestation/release should occur.
-9. Verify expiry and payer refund behavior on a separate test payment. Do not use the same payment for both settlement and refund checks.
-
-Keep transaction hashes, contract address, chain ID, test evidence and observed outcomes. If the real proof-to-release path cannot complete, stop; do not market the product as live conditional settlement.
-
-## Launch boundary
-
-The contract can support all four policy families through one shared deployment, but only a scenario with a validated authoritative evidence adapter may be described as production-enabled. The current homepage playground does not move USDC. A passing preflight is necessary, not sufficient, and does not itself perform a deployment. The source-signed endpoint is server-to-server and is not currently wired into the `/live` console's GitHub/Reclaim UX.
+Publish only facts that can be reproduced: repository URL, demo URL, relevant CI results for the submitted commit, deployed contract address/transaction if actually deployed, and the source-to-settlement transaction if actually completed. State plainly which scenario interactions are simulations.

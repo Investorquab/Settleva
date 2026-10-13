@@ -1,3 +1,4 @@
+/* Archived V1 Reclaim experiment source snapshot. Original path: apps/web/lib/reclaim-session-store.ts. Preserved for future continuation; not compiled by the active application. */
 import postgres from "postgres";
 import type { PaymentCondition } from "@settleva/conditions";
 

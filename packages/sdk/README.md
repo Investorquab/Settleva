@@ -1,79 +1,82 @@
 # @settleva/sdk
 
-The SDK prepares deterministic payment commitments and builds viem-compatible transaction calls for the shared Settleva contract. It does not custody funds, prove external events, or decide whether provider evidence is valid.
+The Settleva SDK is developer infrastructure for conditional USDC settlement on Arc. It prepares payment commitments and typed contract calls; it does not custody funds, sign user transactions, or decide whether external evidence is true.
 
-> Current distribution status: this package is private to the Settleva monorepo. It is not yet published as an independently installable npm package.
+## Package status
 
-## Prepare a conditional payment
+The SDK and its conditions dependency are configured for public npm publication, but they are not installable from npm until the package owner publishes them. Publish @settleva/conditions before @settleva/sdk; pnpm rewrites the workspace dependency when publishing. After publication, install into an existing application with:
 
-The payment expiry and policy expiry must be identical. Amounts are normalized before deriving the payment ID, so equivalent values such as `"01.5000"` and `"1.5"` produce the same amount representation.
+    pnpm add @settleva/sdk
+    # or: npm install @settleva/sdk
 
-```ts
-import {
-  buildApprovalCall,
-  buildCreatePaymentCall,
-  prepareCreatePayment,
-  toTokenUnits
-} from "@settleva/sdk";
-import type { PaymentCondition } from "@settleva/conditions";
+The integration does not require the Settleva website. The application chooses its own wallet connector, contract address and verification backend.
 
-const expiresAt = Math.floor(Date.now() / 1000) + 86_400;
-const condition: PaymentCondition = {
-  version: "1.0",
-  provider: "your-evidence-provider",
-  providerVersion: "1",
-  claims: [
-    { field: "milestone.status", operator: "equals", value: "accepted" }
-  ],
-  expiresAt
-};
+## Create a payment
 
-const prepared = prepareCreatePayment({
-  payer,
-  payee,
-  token,
-  amount: "25",
-  expiry: expiresAt,
-  condition
-});
+    import {
+      buildApprovalCall,
+      buildCreatePaymentCall,
+      prepareCreatePayment
+    } from "@settleva/sdk";
+    import type { PaymentCondition } from "@settleva/sdk";
 
-// This does not send a transaction. Your wallet client asks the user to approve it.
-const approvalCall = buildApprovalCall(prepared, settlevaAddress, 6);
-await walletClient.writeContract({ account, ...approvalCall });
+    const expiresAt = Math.floor(Date.now() / 1000) + 86_400;
+    const condition: PaymentCondition = {
+      version: "1.0",
+      provider: "your-source-provider",
+      providerVersion: "1",
+      claims: [
+        { field: "milestone.status", operator: "equals", value: "accepted" }
+      ],
+      expiresAt
+    };
 
-const fundingCall = buildCreatePaymentCall(prepared, settlevaAddress, 6);
-await walletClient.writeContract({ account, ...fundingCall });
-```
+    const prepared = prepareCreatePayment({
+      payer, payee, token: arcUsdcAddress, amount: "25",
+      expiry: expiresAt, condition
+    });
 
-`buildApprovalCall` and `buildCreatePaymentCall` return typed viem call objects; the host application retains wallet control and must wait for transaction receipts. The example assumes ERC-20 token decimals are known. For Arc USDC, use 6 decimals, and confirm the token address before funding.
+    // Use your own wallet client and your own deployed contract address.
+    // The wallet client signs; the SDK never receives the private key.
+    const approvalCall = buildApprovalCall(prepared, settlevaAddress, 6);
+    await walletClient.writeContract({ account, ...approvalCall });
 
-## Commitment invariants
+    const fundingCall = buildCreatePaymentCall(prepared, settlevaAddress, 6);
+    await walletClient.writeContract({ account, ...fundingCall });
 
-- The payment ID includes payer, payee, token, normalized human-readable amount, expiry and canonical policy.
-- The condition hash is the Keccak-256 digest of deterministic canonical policy JSON.
-- The provider hash is Keccak-256 of the provider ID; the policy hash also commits to the pinned provider version.
-- The proof context binds the payment ID and condition hash.
-- `toTokenUnits(amount, decimals)` validates supported decimal precision before a transaction is built.
-- Payment expiry must exactly match `condition.expiresAt`, and it must still be in the future.
-- Empty policies, duplicate claim fields, malformed claims and unsupported operators are rejected before a commitment is prepared.
+Wait for transaction receipts before treating approval or funding as complete. Arc USDC ERC-20 amounts use six decimals. The SDK validates inputs and builds calls; it does not deploy a contract, connect a wallet, custody funds, verify evidence or sign an attestation.
 
-## Arc asset and chain guarantees
+## Integrator-controlled deployment
 
-The current production contract is USDC-specific. `prepareCreatePayment` and the transaction-call builders reject token addresses other than Arc's ERC-20 USDC interface (`0x3600000000000000000000000000000000000000`). This is intentional: the contract enforces the same allowlist through `ARC_USDC()`, and mainnet preflight verifies the deployed getter.
+Each integrator can deploy the same Settleva.sol code as its own instance and choose its own verificationSigner at construction. Keep the deployment key and the backend verifier key separate. The verifier private key belongs only in that integrator's trusted server-side secret manager; never embed it in browser code or the SDK.
 
-Arc uses two decimal scales for the same underlying USDC balance:
-- Native value/gas: 18 decimals.
-- ERC-20 `transfer`, `approve`, and escrow amount: 6 decimals.
+The verifier address is immutable for that contract instance. Changing it requires a replacement deployment. This does not mean redeploying for every escrow: every call to createPayment records a separate payment with its own payee, amount, expiry, condition hash and provider hash.
 
-Use `ARC_MAINNET_CHAIN_ID`, `ARC_MAINNET_RPC_URL`, `ARC_EXPLORER_URL`, `ARC_USDC_ADDRESS`, and `ARC_USDC_DECIMALS` from the SDK constants rather than copying these values across application code. The SDK only builds calls; it does not sign transactions or verify external evidence.
+A funded payment's terms cannot currently be edited in place. If a product needs amendment or cancellation before expiry, that requires an explicit contract operation and security review. Do not assume the current contract supports editing.
 
-## Responsibility boundaries
+See the contract deployment and trust-boundary guide in contracts/README.md.
 
-- **SDK:** validates payment inputs, canonicalizes policy, derives deterministic identifiers and builds transaction calls.
-- **Evidence provider:** obtains an authoritative signal for the use case. A successful API response is not automatically a cryptographic proof.
-- **Backend:** verifies the configured provider proof/version, binds the result to the funded on-chain payment and condition, evaluates verified claims, enforces persistent replay protection, and signs the settlement attestation.
-- **Contract:** holds the specified ERC-20 amount and enforces payment state, expiry, payee-only release, attestation authorization, proof replay rejection and eligible payer refunds.
+## Evidence integrations
 
-The implemented Reclaim verification path supports the five GitHub deployment-status claims, but production use still requires a real published provider ID/version and matching app credentials. Gaming, freelance, commerce and agent examples in the homepage playground are simulations until corresponding authoritative evidence adapters are implemented and validated.
+The condition engine currently supports exact equality (equals). A real settlement needs an authoritative source and a verifier that validates the outcome, binds it to the funded payment, prevents replay, and signs an attestation accepted by that deployment's contract.
 
-The current policy language supports the `equals` operator only. A passing playground result is not external proof, does not create an attestation, and does not transfer USDC.
+The four website scenarios—gaming rewards, freelance milestones, conditional commerce and agentic economy—are local demonstrations. The SDK does not make all four evidence sources live automatically.
+
+Reclaim/GitHub proof work is deferred to Future Integrations: Reclaim. It is not required to import or use the base SDK.
+
+## Package publishing (maintainer)
+
+From a clean checkout, run pnpm install --frozen-lockfile, pnpm check, pnpm test and pnpm build. After confirming npm ownership and logging in:
+
+    pnpm --filter @settleva/conditions publish --access public
+    pnpm --filter @settleva/sdk publish --access public
+
+The first command must succeed before publishing the SDK because the published SDK depends on @settleva/conditions. Publication requires registry authorization and is separate from GitHub CI or a website deployment.
+
+## Security boundaries
+
+- The application keeps payer/payee wallet control and submits user-authorized transactions.
+- The integrator selects and controls its verification authority for its own deployment.
+- The backend validates source evidence and signs a payment-bound attestation.
+- The contract enforces payment state, payee-only release, expiry/refund rules, attestation authorization and proof replay rejection.
+- A playground result is not proof and does not transfer USDC.

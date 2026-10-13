@@ -1,3 +1,4 @@
+/* Archived Reclaim-based live-console implementation. Original path: apps/web/lib/live-readiness.ts. Preserved for review; not part of the active V1 application. */
 import { getAddress, isAddress } from "viem";
 import { ARC_MAINNET_CHAIN_ID, ARC_USDC_ADDRESS } from "@settleva/sdk";
 import { hasConfiguredReclaimAdapter } from "./reclaim-adapter-registry.ts";

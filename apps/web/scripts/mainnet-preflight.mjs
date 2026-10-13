@@ -1,5 +1,4 @@
 import postgres from "postgres";
-import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
 import { createPublicClient, getAddress, http, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -86,13 +85,6 @@ const envNames = [
   "SETTLEVA_CONTRACT_ADDRESS",
   "NEXT_PUBLIC_SETTLEVA_ADDRESS",
   "SETTLEVA_VERIFIER_PRIVATE_KEY",
-  "RECLAIM_APP_ID",
-  "RECLAIM_APP_SECRET",
-  "RECLAIM_PROVIDER_ID",
-  "RECLAIM_PROVIDER_VERSION",
-  "NEXT_PUBLIC_RECLAIM_PROVIDER_ID",
-  "NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION",
-  "RECLAIM_CALLBACK_URL",
   "DATABASE_URL"
 ];
 
@@ -132,27 +124,6 @@ await check("Server and frontend point to the same non-zero contract address", (
   }
   if (serverContractAddress !== publicContractAddress) {
     throw new Error("SETTLEVA_CONTRACT_ADDRESS and NEXT_PUBLIC_SETTLEVA_ADDRESS differ");
-  }
-});
-
-let callbackUrl;
-await check("Reclaim callback is HTTPS and targets /api/reclaim/callback", () => {
-  const parsed = requireHttpsUrl(values.RECLAIM_CALLBACK_URL, "RECLAIM_CALLBACK_URL");
-  if (parsed.pathname.replace(/\/$/, "") !== "/api/reclaim/callback") {
-    throw new Error("RECLAIM_CALLBACK_URL must end in /api/reclaim/callback");
-  }
-  callbackUrl = parsed;
-});
-
-await check("Frontend and server use the same pinned Reclaim provider/version", () => {
-  if (!values.RECLAIM_PROVIDER_ID || !values.RECLAIM_PROVIDER_VERSION) {
-    throw new Error("Server Reclaim provider ID/version are not configured");
-  }
-  if (values.NEXT_PUBLIC_RECLAIM_PROVIDER_ID !== values.RECLAIM_PROVIDER_ID) {
-    throw new Error("NEXT_PUBLIC_RECLAIM_PROVIDER_ID does not match RECLAIM_PROVIDER_ID");
-  }
-  if (values.NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION !== values.RECLAIM_PROVIDER_VERSION) {
-    throw new Error("NEXT_PUBLIC_RECLAIM_PROVIDER_VERSION does not match RECLAIM_PROVIDER_VERSION");
   }
 });
 
@@ -246,24 +217,6 @@ if (serverClient && serverChainOk) {
   }
 }
 
-if (values.RECLAIM_APP_ID && values.RECLAIM_APP_SECRET && values.RECLAIM_PROVIDER_ID && values.RECLAIM_PROVIDER_VERSION) {
-  await check("Reclaim SDK resolves the exact configured published provider/version", async () => {
-    const request = await ReclaimProofRequest.init(
-      values.RECLAIM_APP_ID,
-      values.RECLAIM_APP_SECRET,
-      values.RECLAIM_PROVIDER_ID,
-      { log: false }
-    );
-    const resolved = request.getProviderVersion();
-    if (resolved.providerId !== values.RECLAIM_PROVIDER_ID) {
-      throw new Error("Reclaim SDK resolved a different provider ID");
-    }
-    if (resolved.providerVersion !== values.RECLAIM_PROVIDER_VERSION) {
-      throw new Error(`Reclaim SDK resolved version ${resolved.providerVersion}, expected ${values.RECLAIM_PROVIDER_VERSION}`);
-    }
-  });
-}
-
 if (values.DATABASE_URL) {
   await check("Production replay/session database accepts a query", async () => {
     let sql;
@@ -273,62 +226,49 @@ if (values.DATABASE_URL) {
       if (Number(rows[0]?.settleva_preflight) !== 1) throw new Error("Database probe returned an unexpected result");
 
       const tables = await sql`
-        select
-          to_regclass('public.settleva_reclaim_sessions') as sessions_table,
-          to_regclass('public.settleva_reclaim_replay') as replay_table
+        select to_regclass('public.settleva_evidence_replay') as replay_table
       `;
-      if (!tables[0]?.sessions_table || !tables[0]?.replay_table) {
-        throw new Error("Settleva session/replay tables are missing; run pnpm --filter @settleva/web db:migrate");
+      if (!tables[0]?.replay_table) {
+        throw new Error("Provider-neutral evidence replay table is missing; run pnpm --filter @settleva/web db:migrate");
       }
 
       const columns = await sql`
-        select table_name, column_name
+        select column_name
         from information_schema.columns
         where table_schema = 'public'
-          and table_name in ('settleva_reclaim_sessions', 'settleva_reclaim_replay')
+          and table_name = 'settleva_evidence_replay'
       `;
-      const actualColumns = new Set(columns.map((row) => row.table_name + "." + row.column_name));
+      const actualColumns = new Set(columns.map((row) => row.column_name));
       const requiredColumns = [
-        "settleva_reclaim_sessions.session_id",
-        "settleva_reclaim_sessions.payment_id",
-        "settleva_reclaim_sessions.condition_hash",
-        "settleva_reclaim_sessions.condition",
-        "settleva_reclaim_sessions.provider_id",
-        "settleva_reclaim_sessions.provider_version",
-        "settleva_reclaim_sessions.status_token_hash",
-        "settleva_reclaim_sessions.status",
-        "settleva_reclaim_sessions.proof_identifier",
-        "settleva_reclaim_sessions.verification_signature",
-        "settleva_reclaim_replay.identifier_type",
-        "settleva_reclaim_replay.identifier",
-        "settleva_reclaim_replay.session_id",
-        "settleva_reclaim_replay.proof_identifier",
-        "settleva_reclaim_replay.payment_id",
-        "settleva_reclaim_replay.condition_hash"
+        "identifier_type",
+        "identifier",
+        "session_id",
+        "proof_identifier",
+        "payment_id",
+        "condition_hash",
+        "accepted_at"
       ];
       const missingColumns = requiredColumns.filter((column) => !actualColumns.has(column));
       if (missingColumns.length) {
-        throw new Error("Settleva DB schema is incomplete (" + missingColumns.join(", ") + "); run pnpm --filter @settleva/web db:migrate");
+        throw new Error("Evidence replay schema is incomplete (" + missingColumns.join(", ") + "); run pnpm --filter @settleva/web db:migrate");
       }
 
       const indexes = await sql`
         select indexname from pg_indexes
         where schemaname = 'public'
           and indexname in (
-            'settleva_reclaim_sessions_payment_idx',
-            'settleva_reclaim_replay_session_idx',
-            'settleva_reclaim_replay_proof_idx'
+            'settleva_evidence_replay_session_idx',
+            'settleva_evidence_replay_proof_idx'
           )
       `;
       const existingIndexes = new Set(indexes.map((row) => row.indexname));
       const requiredIndexes = [
-        "settleva_reclaim_sessions_payment_idx",
-        "settleva_reclaim_replay_session_idx",
-        "settleva_reclaim_replay_proof_idx"
+        "settleva_evidence_replay_session_idx",
+        "settleva_evidence_replay_proof_idx"
       ];
       const missingIndexes = requiredIndexes.filter((indexName) => !existingIndexes.has(indexName));
       if (missingIndexes.length) {
-        throw new Error("Settleva DB indexes are missing (" + missingIndexes.join(", ") + "); run pnpm --filter @settleva/web db:migrate");
+        throw new Error("Evidence replay indexes are missing (" + missingIndexes.join(", ") + "); run pnpm --filter @settleva/web db:migrate");
       }
     } finally {
       if (sql) await sql.end({ timeout: 3 });

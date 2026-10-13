@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-function privateJson(body: unknown, status: number) {
-  return NextResponse.json(body, {status,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
+function deferred() {
+  return NextResponse.json(
+    {
+      enabled: false,
+      status: "deferred",
+      error: "Reclaim integration is not part of Settleva V1. The previous implementation is preserved under future-integrations/reclaim/."
+    },
+    { status: 410, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } }
+  );
 }
 
-/** The Reclaim callback is the only route allowed to commit proof verification. */
-export async function POST() {
-  return privateJson({
-    verified:false,
-    error:"This verification endpoint is retired. Submit proofs through the Reclaim callback flow."
-  }, 410);
-}
-
-export async function GET() {
-  return privateJson({error:"Method not allowed."}, 405);
-}
+export async function GET() { return deferred(); }
+export async function POST() { return deferred(); }

@@ -1,3 +1,4 @@
+/* Archived V1 Reclaim experiment source snapshot. Original path: apps/web/lib/reclaim-binding.ts. Preserved for future continuation; not compiled by the active application. */
 import type { Hex } from "viem";
 import type { PaymentCondition } from "@settleva/conditions";
 import { extractGitHubDeploymentClaims, isGitHubDeploymentCondition } from "@settleva/providers";

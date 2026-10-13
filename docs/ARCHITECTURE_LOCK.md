@@ -1,80 +1,53 @@
 # Architecture Lock — Settleva
 
-**Status:** Current implementation contract. This file supersedes the earlier working draft that described SHA-256 condition hashes and a preferred on-chain Reclaim verifier. Those statements are not the deployed design.
+**Status:** Binding product and implementation decisions for V1.
 
 ## 1. Product and deployment model
 
-Settleva is developer infrastructure for policy-based conditional USDC settlement on Arc. Deploy **one shared `Settleva.sol` contract**. Each payment stores its own payer, payee, token, amount, expiry, condition hash, provider hash, and status. Gaming rewards, freelance milestones, conditional commerce, and agentic task settlement are different policy/application workflows over that same contract; they are not separate contracts.
+Settleva is developer infrastructure. The SDK and reusable contract code are the product; the website is a demonstration and onboarding surface, not a hosted escrow product.
 
-The contract is not a payment dashboard, and the playground is not a deployment wizard. Playground results are local simulations only.
+- Keep one canonical Settleva.sol implementation in the repository.
+- Each integrator may deploy its own contract instance for its own application and choose the verifier address at construction time.
+- The Settleva demo deployment is only one example instance. Integrators must not be forced to use a Settleva-controlled verifier.
+- Integrators control their deployment wallet and verification backend/key. Deployment keys and verifier private keys must stay server-side and separate.
+- The browser playground remains simulation-only and does not ask for private keys or imply real evidence verification.
 
-## 2. Canonical commitments
+## 2. Payment condition and lifecycle
+
+A condition belongs to an individual payment. Each call to createPayment supplies that payment's ID, payee, supported token, amount, expiry, condition hash and provider hash. A different new payment may use a different condition without redeploying any contract.
+
+The current contract does not support editing the condition or terms of an already funded payment in place. Its lifecycle is None → Funded → Released or None → Funded → Refunded. Release requires a valid payment-bound attestation before expiry; the payer can refund at or after expiry. If a product needs amendment or cancellation before expiry, add an explicit, reviewed contract operation rather than assuming edits are supported.
+
+A contract redeployment is a deployment-level action: for example, deploying a new contract implementation or changing the current contract's immutable verificationSigner. It is not part of ordinary payment creation.
+
+## 3. Canonical commitments and supported policy
 
 - A version-1.0 condition contains a provider ID, provider version, expiry, and one or more unique-field claims.
-- The only currently supported policy operator is exact string equality (`equals`).
-- Claims are sorted deterministically by field, operator, then value; the condition is canonical JSON with the stable fields `version`, `provider`, `providerVersion`, `claims`, and `expiresAt`.
-- The condition commitment is EVM-native `keccak256(UTF-8(canonical JSON))`, implemented by the shared conditions package. It is **not SHA-256**.
-
-The only accepted settlement asset is Arc USDC's ERC-20 interface at `0x3600000000000000000000000000000000000000`. The Solidity contract, SDK, live route and mainnet preflight all enforce/check the same token address. Native USDC gas values use 18 decimals; ERC-20 escrow transfers use six.
-- The payment ID is a deterministic keccak256 commitment to normalized payer/payee/token addresses, normalized human token amount, expiry, and canonical condition.
-- Payment expiry must equal `condition.expiresAt`. The client, SDK, backend, and funded on-chain record must agree on the exact condition hash, provider hash, and expiry.
-
-## 3. Payment lifecycle and contract
-
-The contract supports these effective states:
-
-- `None -> Funded`: payer approves the token and calls `createPayment`; the contract pulls the exact amount.
-- `Funded -> Released`: the payee calls `release` before expiry with a valid payment-bound verifier attestation and an unused proof identifier.
-- `Funded -> Refunded`: the payer calls `refund` at or after expiry.
-
-Released and refunded payments are terminal. The contract rejects invalid callers, duplicate payment IDs, invalid amounts/expiry, invalid signatures, reused proof identifiers, incorrect state, and failed ERC-20 transfers. USDC is an existing token and is not deployed by Settleva.
+- The currently supported operator is exact string equality (equals).
+- Claims are sorted deterministically and hashed as EVM-native keccak256 over canonical JSON.
+- Payment expiry equals condition.expiresAt.
+- The supported escrow asset is Arc USDC's ERC-20 interface 0x3600000000000000000000000000000000000000 with six decimals. Native Arc USDC gas/value uses 18 decimals.
 
 ## 4. Verification trust boundary
 
-The current model is **backend-attested settlement**, not trustless on-chain verification of Reclaim proofs:
+The contract uses backend-attested settlement. The authority that signs release attestations is the verifier address fixed in a contract instance. The integrator deploying its own instance can control that address and operate the matching signer in its own trusted backend.
 
-1. The backend resolves the pinned Reclaim provider/version and cryptographically verifies the received proof.
-2. It binds the proof to the initiated session, payment ID, condition hash, and provider context.
-3. It evaluates verified extracted claims against the exact committed condition and enforces persistent replay protection.
-4. It checks the Arc payment record is funded and its commitment matches the requested condition.
-5. It signs an attestation bound to chain ID, deployed contract address, payment ID, condition hash, provider hash, and proof identifier.
-6. The contract verifies the immutable `verificationSigner` and enforces payment state, payee authority, expiry, and proof reuse.
+The SDK builds payment commitments and contract calls; it does not custody funds, prove external events, sign wallet transactions, or automatically decide whether a provider is truthful. A verification integration must validate an authoritative outcome, bind it to the funded payment/condition, enforce replay protection, and sign only after checks pass. The contract enforces on-chain authorization, payment state, payee, expiry and refund rules.
 
-The contract trusts the configured backend verification signer. A compromised signer key could authorize invalid releases. The signer is immutable in the deployed contract, so changing it requires a new deployment. Use a dedicated signer, keep its key server-side, and verify its on-chain address before accepting funds.
+Never put private keys in browser code. The user’s wallet should sign its own approval/funding calls through the application’s wallet client; the verifier signing key belongs only in that integrator’s trusted server-side environment.
 
-## 5. Evidence and supported scope
+## 5. Four scenario demos and evidence scope
 
-The repository currently has two server-side evidence entry points:
+The website demonstrates gaming rewards, freelance milestones, conditional commerce and agentic economy through local sample policies and evidence. These scenarios are not evidence providers themselves and are not automatically live integrations.
 
-- **Reclaim path:** the separate `/live` console uses a GitHub deployment-status proof. Its exact published provider ID/version and credentials must be supplied and validated at runtime. Placeholders or static/unbound API responses are not acceptable.
-- **Source-signed path:** `POST /api/evidence/attest` verifies a timestamped Ed25519 signature from an authoritative server against an exact provider ID/version and registered public key. It does not have a matching general-purpose `/live` UI, and it requires the source to implement signing and independently establish the truth of the event.
+A source-signed backend protocol exists as a general integration boundary, but each source system must independently establish the truth of its outcome, hold its signing key securely, and pass positive, negative, replay and real-settlement tests before being described as production-enabled.
 
-These are integration mechanisms, not the four use cases themselves. Gaming, freelance, commerce and agentic examples remain simulations until real source systems are connected/configured and a low-value Arc funding → evidence → attestation → release test passes. A successful API response, client JSON, browser boolean, or playground result is not proof.
+Reclaim/GitHub proof is deferred. Its existing implementation and tests are preserved under future-integrations/reclaim/ for judges and future work. Reclaim is not a required runtime dependency for the website demonstrations or base SDK.
 
-## 6. Secrets and runtime configuration
+## 6. SDK distribution
 
-- Never expose provider secrets, database credentials, deployment keys, or the verifier private key in the browser, public variables, repository, logs, or chat.
-- Keep `SETTLEVA_VERIFIER_PRIVATE_KEY` server-side. The constructor's `verificationSigner` must equal the address derived from this private key.
-- Use Arc mainnet chain ID `5042`, the Arc mainnet RPC, and the exact deployed contract address consistently in server and frontend configuration.
-- Replay/session protection must use persistent database storage with atomic conflict handling.
-- Backend configuration, RPC, database, provider, or on-chain-state errors fail closed: no settlement attestation is issued.
-- SDK packages remain workspace/private until external package publication and dependency packaging are deliberately completed.
+The independently installable package is the target developer experience. @settleva/conditions must be published before @settleva/sdk because the SDK depends on it. Repository metadata is prepared for public npm publication, but the release is not complete until the package owner publishes both and verifies a clean consumer installation.
 
-## 7. Locked UI and playground behavior
+## 7. Protected product surface
 
-The landing page and visual system are locked. Do not alter `apps/web/app/page.tsx`, `apps/web/app/globals.css`, or `apps/web/app/layout.tsx` without explicit approval. The standalone `/live` route is additive and has its own CSS module; it must not restyle or replace the approved homepage. Provider-neutral verification work belongs in server-side adapter/verification modules and must not change the four homepage playground scenarios or imply those simulations are live proof integrations.
-
-The homepage playground must use the shared condition canonicalizer and evaluator, allow guided and developer modes, and clearly label all results as simulated. It must not deploy contracts, claim cryptographic proof verification, connect a wallet, or imply that USDC moved. Real wallet transactions belong only in the separate `/live` route, which must display transaction links and backend-attestation trust boundaries.
-
-## 8. Mainnet release gate
-
-A green CI run is code/test evidence, not a production deployment. Before accepting real funds, all of the following must be true:
-
-1. The shared contract is deployed to Arc mainnet and its bytecode and immutable signer are checked.
-2. The production backend/database and website are deployed with the exact server-side configuration.
-3. At least one actual authoritative evidence path is configured and validated: either the published, exact-version Reclaim provider used by `/live`, or a source-signed provider with a registered Ed25519 public key and source-side signing implementation. The source-signed API alone is not evidence that any external system is integrated.
-4. The mainnet preflight passes for the Reclaim `/live` path, including Arc RPC, USDC, contract, signer, Reclaim provider, and database. A source-signed-only integration must additionally pass the documented source-specific configuration and acceptance checks.
-5. A controlled low-value real payment completes funding → genuine source evidence → backend verification/attestation → payee release, with the final Arc transaction, state, and USDC balance change confirmed.
-6. Invalid or nonqualifying evidence does not release funds, duplicate/replayed evidence is rejected, and expiry/refund behavior is verified before general launch.
-
-Do not represent simulations, CI's “Record production deployment evidence” job, or a Vercel CI status as proof that the contract or backend has been deployed or that settlement is live.
+Preserve the approved homepage and playground design. Do not redesign apps/web/app/page.tsx, apps/web/app/globals.css, or apps/web/app/layout.tsx without explicit approval. The homepage remains a demo of the developer experience and its four scenario policies.

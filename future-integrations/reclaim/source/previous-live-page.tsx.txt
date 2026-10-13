@@ -1,3 +1,4 @@
+/* Archived Reclaim-based live-console implementation. Original path: apps/web/app/live/page.tsx. Preserved for review; not part of the active V1 application. */
 import type { Metadata } from "next";
 import LiveSettlementConsole from "./live-settlement-console";
 

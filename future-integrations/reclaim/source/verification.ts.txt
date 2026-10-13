@@ -1,3 +1,4 @@
+/* Archived V1 Reclaim experiment source snapshot. Original path: apps/web/lib/reclaim-verification.ts. Preserved for future continuation; not compiled by the active application. */
 import { ReclaimProofRequest, verifyProof } from "@reclaimprotocol/js-sdk";
 import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/conditions";
 import { buildVerificationAttestationHash } from "@settleva/sdk";

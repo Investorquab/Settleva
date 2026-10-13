@@ -1,0 +1,20 @@
+/* Archived V1 Reclaim experiment source snapshot. Original path: apps/web/app/api/reclaim/verify/route.ts. Preserved for future continuation; not compiled by the active application. */
+import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+
+function privateJson(body: unknown, status: number) {
+  return NextResponse.json(body, {status,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
+}
+
+/** The Reclaim callback is the only route allowed to commit proof verification. */
+export async function POST() {
+  return privateJson({
+    verified:false,
+    error:"This verification endpoint is retired. Submit proofs through the Reclaim callback flow."
+  }, 410);
+}
+
+export async function GET() {
+  return privateJson({error:"Method not allowed."}, 405);
+}
