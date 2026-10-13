@@ -68,11 +68,13 @@ Reclaim/GitHub proof work is deferred to [Future Integrations: Reclaim](../../fu
 
 ## Package publishing (maintainer)
 
-Use [.github/workflows/publish-npm.yml](../../.github/workflows/publish-npm.yml) from the repository's GitHub Actions page on the `main` branch. The workflow validates, builds and packs both packages, then publishes `@settleva/conditions` before `@settleva/sdk`. It has an explicit `publish_now` confirmation input, and version numbers come from each package's `package.json`.
+Use [.github/workflows/publish-npm.yml](../../.github/workflows/publish-npm.yml) from the repository's GitHub Actions page on the `main` branch. The workflow validates, builds and packs both packages and checks the packed SDK dependency metadata, then stages `@settleva/conditions` before `@settleva/sdk` via `npm stage publish`. The manual workflow has a `stage_release` confirmation input and uses the versions from each package's `package.json`.
 
-For the initial publication, configure the GitHub Actions repository secret `NPM_TOKEN` with permission to publish these public packages. Run the workflow with `publish_now=true` only after confirming the package namespace is owned and release contents are correct.
+For initial setup, create an npm granular access token with **Read and write (stage only)**, **Bypass two-factor authentication unchecked**, package/scope access limited to `@settleva` if available, and a short expiry. Save it as repository secret `NPM_TOKEN`. The workflow pins npm CLI 11.21.0 because npm staged publishing requires a recent CLI. Run the workflow with `stage_release=true` only when package scope ownership and release contents are confirmed.
 
-After the first successful release, configure npm Trusted Publishing for each package: GitHub Actions, repository `Investorquab/Settleva`, workflow `publish-npm.yml`, environment `npm-publish`. Then remove `NPM_TOKEN` and use the workflow's GitHub OIDC identity for later publishes. See the root README for the full release steps.
+Review and approve `@settleva/conditions` in npm's **Staged Packages** page using 2FA, confirm it is live, and then approve `@settleva/sdk`. Staging a previously nonexistent package may expose a `0.0.0-stage` placeholder, but not the staged release contents. Do not call a release complete until both public package pages and a clean consumer install have been checked.
+
+After the bootstrap release, configure npm Trusted Publishing for each package with provider GitHub Actions, repository `Investorquab/Settleva`, workflow `publish-npm.yml`, and environment `npm-publish`. Verify a trusted release/staging run before removing `NPM_TOKEN`. See the root README for the full release steps.
 
 Before announcing an SDK release, verify both package pages on npm and test a clean consumer install in a separate temporary project.
 

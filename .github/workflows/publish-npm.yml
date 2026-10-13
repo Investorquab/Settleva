@@ -3,8 +3,8 @@ name: Publish npm packages
 on:
   workflow_dispatch:
     inputs:
-      publish_now:
-        description: "Set true only when npm ownership/authentication are configured and you intend to publish the package versions in package.json."
+      stage_release:
+        description: "Set true only when NPM_TOKEN is a stage-only token scoped to @settleva and you intend to stage package versions in package.json for review."
         required: true
         type: boolean
         default: false
@@ -90,8 +90,8 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish public packages to npm
-    if: github.ref == 'refs/heads/main' && inputs.publish_now
+    name: Stage public packages for npm approval
+    if: github.ref == 'refs/heads/main' && inputs.stage_release
     needs: validate-and-pack
     runs-on: ubuntu-latest
     environment: npm-publish
@@ -109,7 +109,11 @@ jobs:
         with:
           name: settleva-npm-tarballs
           path: .release
-      - name: Publish conditions first, then SDK
+      - name: Install npm CLI with staged publishing support
+        run: |
+          npm install --global npm@11.21.0
+          npm --version
+      - name: Stage conditions first, then SDK for 2FA approval
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
@@ -117,6 +121,10 @@ jobs:
           set -euo pipefail
           conditions_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-conditions-*.tgz' -print -quit)"
           sdk_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
-          test -n "$conditions_tgz" && test -n "$sdk_tgz"
-          npm publish "$conditions_tgz" --access public --provenance
-          npm publish "$sdk_tgz" --access public --provenance
+          test -n "$conditions_tgz" && test -s "$conditions_tgz"
+          test -n "$sdk_tgz" && test -s "$sdk_tgz"
+          npm stage publish "$conditions_tgz" --access public
+          npm stage publish "$sdk_tgz" --access public
+          echo "Both package versions are staged for review, not publicly released."
+          echo "Approve @settleva/conditions first in npm's Staged Packages UI."
+          echo "Only after conditions is live, approve @settleva/sdk."
