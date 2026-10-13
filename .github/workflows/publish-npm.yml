@@ -44,7 +44,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          package-manager-cache: false
       - name: Install locked workspace
         run: pnpm install --frozen-lockfile
       - name: Verify database migration
@@ -58,18 +57,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .release
-          (cd packages/conditions && pnpm pack --pack-destination ../../.release)
-          (cd packages/sdk && pnpm pack --pack-destination ../../.release)
-          conditions_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-conditions-*.tgz' -print -quit)"
-          sdk_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
+          mkdir -p release-artifacts
+          (cd packages/conditions && pnpm pack --pack-destination ../../release-artifacts)
+          (cd packages/sdk && pnpm pack --pack-destination ../../release-artifacts)
+          conditions_tgz="$(find release-artifacts -maxdepth 1 -type f -name 'settleva-conditions-*.tgz' -print -quit)"
+          sdk_tgz="$(find release-artifacts -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
           test -n "$conditions_tgz" && test -s "$conditions_tgz"
           test -n "$sdk_tgz" && test -s "$sdk_tgz"
           node --input-type=module <<'NODE'
           import { execFileSync } from "node:child_process";
           import { readdirSync } from "node:fs";
-          const files = readdirSync(".release").filter((file) => file.endsWith(".tgz"));
-          const manifestFor = (file) => JSON.parse(execFileSync("tar", ["-xOf", ".release/" + file, "package/package.json"], { encoding: "utf8" }));
+          const files = readdirSync("release-artifacts").filter((file) => file.endsWith(".tgz"));
+          const manifestFor = (file) => JSON.parse(execFileSync("tar", ["-xOf", "release-artifacts/" + file, "package/package.json"], { encoding: "utf8" }));
           const conditionsFile = files.find((file) => file.startsWith("settleva-conditions-"));
           const sdkFile = files.find((file) => file.startsWith("settleva-sdk-"));
           if (!conditionsFile || !sdkFile || files.length !== 2) throw new Error("Expected exactly one tarball per Settleva package.");
@@ -85,7 +84,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: settleva-npm-tarballs
-          path: .release/*.tgz
+          path: release-artifacts/*.tgz
           if-no-files-found: error
           retention-days: 7
 
@@ -104,11 +103,10 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-          package-manager-cache: false
       - uses: actions/download-artifact@v4
         with:
           name: settleva-npm-tarballs
-          path: .release
+          path: release-artifacts
       - name: Install npm CLI with staged publishing support
         run: |
           npm install --global npm@11.21.0
@@ -119,8 +117,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          conditions_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-conditions-*.tgz' -print -quit)"
-          sdk_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
+          conditions_tgz="$(find release-artifacts -maxdepth 1 -type f -name 'settleva-conditions-*.tgz' -print -quit)"
+          sdk_tgz="$(find release-artifacts -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
           test -n "$conditions_tgz" && test -s "$conditions_tgz"
           test -n "$sdk_tgz" && test -s "$sdk_tgz"
           npm stage publish "$conditions_tgz" --access public
