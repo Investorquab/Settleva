@@ -13,6 +13,7 @@ This folder preserves the previous Reclaim work so maintainers and judges can in
 - A planned proof binding from a Reclaim session to payment ID and condition hash.
 - Decision checks, freshness guards and replay-protection integration.
 - Provider specification and replay/session documentation.
+- The legacy Reclaim-specific SQL schemas, retained as `docs/legacy-replay.sql` and `docs/legacy-sessions.sql`.
 
 Original TypeScript sources are retained as .ts.txt snapshots under source/ so they remain reviewable without compiling into the current Next.js application. The former API entry points are retired in V1 and return an explicit deferred response until the integration is deliberately resumed.
 

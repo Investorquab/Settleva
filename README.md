@@ -23,13 +23,17 @@ These are four policy examples over the same settlement primitives, not four sep
 
 ## SDK distribution status
 
-The SDK packages are configured for public npm publication, but registry installation will work only after the package owner publishes both @settleva/conditions and @settleva/sdk. Publish the conditions dependency first. The SDK README contains installation, integration and release instructions. Until publication is verified, do not describe the npm release as completed.
+The SDK and its condition-engine dependency are prepared for public npm publication, but they are not installable from npm until the package owner publishes them and verifies a clean consumer installation. The release workflow is [.github/workflows/publish-npm.yml](.github/workflows/publish-npm.yml).
+
+For the first release, add an npm publish token as the GitHub Actions repository secret `NPM_TOKEN`, then run **Actions → Publish npm packages** on `main` and explicitly set `publish_now` to true. The workflow runs the repository checks, tests and builds, creates package tarballs, confirms that the SDK does not retain a `workspace:` dependency, and publishes `@settleva/conditions` before `@settleva/sdk`.
+
+After the first successful publication, configure npm Trusted Publishing separately for both packages: provider **GitHub Actions**, owner **Investorquab**, repository **Settleva**, workflow **publish-npm.yml**, environment **npm-publish**. Then remove `NPM_TOKEN`; subsequent publishes can use short-lived GitHub OIDC credentials. Follow the instructions in [the SDK README](packages/sdk/README.md). Do not describe the npm release as complete until both registry pages and a fresh consumer install have been verified.
 
 ## Verification and future work
 
 The base SDK does not mandate Reclaim. The core protocol needs an authoritative evidence source and a verifier selected by the integrator. A source-signed server integration boundary exists in the repository, but it is not a ready-made integration for every game, marketplace, commerce service or agent orchestrator; each real source still needs implementation and validation.
 
-Reclaim/GitHub deployment proof is deferred to Future Integrations: Reclaim. The earlier code and test work is preserved there for review and future continuation. It is not a prerequisite for the four website demonstrations or for importing the SDK.
+Reclaim/GitHub deployment proof is deferred to [Future Integrations: Reclaim](future-integrations/reclaim/README.md). The earlier code, tests, SQL schemas and provider notes are preserved there for judges and future continuation. It is not a prerequisite for the four website demonstrations or for importing the base SDK.
 
 ## Repository map
 
@@ -39,7 +43,7 @@ Reclaim/GitHub deployment proof is deferred to Future Integrations: Reclaim. The
 - packages/providers: provider integration utilities.
 - packages/verification: verification types and persistent replay protection.
 - contracts: reusable Solidity implementation and tests.
-- future-integrations/reclaim: deferred Reclaim proof work, source snapshots, findings and next steps.
+- future-integrations/reclaim: deferred Reclaim proof work, SQL schemas, source snapshots, findings and next steps.
 - docs: architecture, security, Arc compatibility and deployment notes.
 
 ## Development checks

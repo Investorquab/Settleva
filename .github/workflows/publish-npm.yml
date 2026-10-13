@@ -1,0 +1,122 @@
+name: Publish npm packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_now:
+        description: "Set true only when npm ownership/authentication are configured and you intend to publish the package versions in package.json."
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: settleva-npm-publish
+  cancel-in-progress: false
+
+jobs:
+  validate-and-pack:
+    name: Validate and pack release artifacts
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: settleva
+          POSTGRES_PASSWORD: settleva
+          POSTGRES_DB: settleva
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U settleva -d settleva"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://settleva:settleva@localhost:5432/settleva
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install locked workspace
+        run: pnpm install --frozen-lockfile
+      - name: Verify database migration
+        run: pnpm --filter @settleva/web db:migrate
+      - name: Check, test, and build workspace
+        run: |
+          pnpm check
+          pnpm test
+          pnpm build
+      - name: Pack both public packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .release
+          (cd packages/conditions && pnpm pack --pack-destination ../../.release)
+          (cd packages/sdk && pnpm pack --pack-destination ../../.release)
+          conditions_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-conditions-*.tgz' -print -quit)"
+          sdk_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
+          test -n "$conditions_tgz" && test -s "$conditions_tgz"
+          test -n "$sdk_tgz" && test -s "$sdk_tgz"
+          node --input-type=module <<'NODE'
+          import { execFileSync } from "node:child_process";
+          import { readdirSync } from "node:fs";
+          const files = readdirSync(".release").filter((file) => file.endsWith(".tgz"));
+          const manifestFor = (file) => JSON.parse(execFileSync("tar", ["-xOf", ".release/" + file, "package/package.json"], { encoding: "utf8" }));
+          const conditionsFile = files.find((file) => file.startsWith("settleva-conditions-"));
+          const sdkFile = files.find((file) => file.startsWith("settleva-sdk-"));
+          if (!conditionsFile || !sdkFile || files.length !== 2) throw new Error("Expected exactly one tarball per Settleva package.");
+          const conditions = manifestFor(conditionsFile);
+          const sdk = manifestFor(sdkFile);
+          if (conditions.private === true || sdk.private === true) throw new Error("Public packages must not be marked private.");
+          if (sdk.dependencies?.["@settleva/conditions"]?.startsWith("workspace:")) throw new Error("Packed SDK must not retain a workspace: dependency.");
+          if (sdk.dependencies?.["@settleva/conditions"] !== conditions.version && sdk.dependencies?.["@settleva/conditions"] !== "^" + conditions.version && sdk.dependencies?.["@settleva/conditions"] !== "~" + conditions.version) {
+            throw new Error("Packed SDK must depend on the conditions package version included in this release.");
+          }
+          console.log("Validated tarballs:", conditionsFile, sdkFile);
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: settleva-npm-tarballs
+          path: .release/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish public packages to npm
+    if: github.ref == 'refs/heads/main' && inputs.publish_now
+    needs: validate-and-pack
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: settleva-npm-tarballs
+          path: .release
+      - name: Publish conditions first, then SDK
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          conditions_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-conditions-*.tgz' -print -quit)"
+          sdk_tgz="$(find .release -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
+          test -n "$conditions_tgz" && test -n "$sdk_tgz"
+          npm publish "$conditions_tgz" --access public --provenance
+          npm publish "$sdk_tgz" --access public --provenance
