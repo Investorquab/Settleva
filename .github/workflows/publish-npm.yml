@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       stage_release:
-        description: "Set true only when NPM_TOKEN is a stage-only token scoped to @settleva and you intend to stage package versions in package.json for review."
+        description: "Set true only after both npm packages have a GitHub Actions Trusted Publisher configured for this workflow and you intend to stage the versions in package.json for 2FA review."
         required: true
         type: boolean
         default: false
@@ -111,9 +111,7 @@ jobs:
         run: |
           npm install --global npm@11.21.0
           npm --version
-      - name: Stage conditions first, then SDK for 2FA approval
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Stage conditions first, then SDK using npm Trusted Publishing (OIDC)
         shell: bash
         run: |
           set -euo pipefail
