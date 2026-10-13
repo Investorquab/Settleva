@@ -4,14 +4,14 @@ The Settleva SDK is developer infrastructure for conditional USDC settlement on 
 
 ## Package status and installation
 
-The public `@settleva/sdk@0.1.0` release is available on npm. Its dependency `@settleva/conditions@0.1.0` is also public. A clean consumer installation and Node ESM import smoke test passed for these exports: `prepareCreatePayment`, `buildApprovalCall`, and `buildCreatePaymentCall`.
+The public release `@settleva/sdk@0.1.1` is available on npm, alongside `@settleva/conditions@0.1.1`. A clean consumer installation verified that the SDK dependency resolves correctly and these exports import successfully: `prepareCreatePayment`, `buildApprovalCall`, and `buildCreatePaymentCall`.
 
-Install in an existing application:
+Install into an existing application:
 
     pnpm add @settleva/sdk
     # or: npm install @settleva/sdk
 
-The SDK does not require the Settleva website. The application selects its own wallet connector, contract address and verification backend. The SDK does not custody funds, receive private keys or sign transactions.
+The integration does not require the Settleva website. The application chooses its own wallet connector, contract address and verification backend. The SDK never receives private keys or signs transactions.
 
 
 ## Create a payment
@@ -69,35 +69,21 @@ Reclaim/GitHub proof work is deferred to [Future Integrations: Reclaim](../../fu
 
 ## Package publishing (maintainer)
 
-Both `@settleva/conditions@0.1.0` and `@settleva/sdk@0.1.0` are public. The repository is preparing patch release `0.1.1` to correct this published documentation and verify tokenless staged publishing.
+Both `@settleva/conditions@0.1.1` and `@settleva/sdk@0.1.1` have been released and verified from a clean consumer project.
 
-### Trusted Publisher setup
+For subsequent releases, use [.github/workflows/publish-npm.yml](../../.github/workflows/publish-npm.yml) on `main` with `stage_release=true`. Each npm package has a GitHub Actions Trusted Publisher configured for:
 
-On **each package** at npmjs.com, open **Settings → Trusted Publisher** and configure:
-
-- Provider: **GitHub Actions**
-- Organization or user: `Investorquab`
+- Owner/user: `Investorquab`
 - Repository: `Settleva`
-- Workflow filename: `publish-npm.yml` (not the full path)
-- Environment name: `npm-publish`
-- Allowed action: **`npm stage publish` only**
+- Workflow filename: `publish-npm.yml`
+- Environment: `npm-publish`
+- Allowed action: `npm stage publish` (no direct `npm publish`)
 
-The workflow grants `id-token: write`, uses Node 24 and npm CLI 11.21.0, and stages packages rather than publishing them directly. It does not need `NPM_TOKEN` when Trusted Publishing is configured.
+The workflow grants `id-token: write`, installs npm CLI 11.21.0, and stages conditions before the SDK. Review/approve `@settleva/conditions` with npm 2FA, verify it is live, then approve `@settleva/sdk`. Keep future versions and release tags synchronized with the package manifests.
 
-### Stage and approve release 0.1.1
+The initial long-lived token has been retired. Do not add an `NPM_TOKEN` fallback back to the workflow; investigate Trusted Publisher configuration if tokenless staging fails. Never commit or disclose publishing tokens or private keys.
 
-1. Configure the Trusted Publisher on both `@settleva/conditions` and `@settleva/sdk`.
-2. Run [.github/workflows/publish-npm.yml](../../.github/workflows/publish-npm.yml) on `main` with `stage_release=true`.
-3. Verify GitHub Actions completed and both package versions were staged.
-4. Approve `@settleva/conditions@0.1.1` in npm's Staged Packages UI using 2FA. Verify it is live.
-5. Then approve `@settleva/sdk@0.1.1` using 2FA and verify it is live.
-6. After the workflow succeeds via OIDC, remove the GitHub Actions repository secret `NPM_TOKEN` and revoke the temporary npm access token under npm **Access Tokens**.
-
-Keep the secret and token until the OIDC staging run succeeds; don't revoke the fallback credentials early. Never commit or disclose secrets.
-
-Reference: [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) and [staged publishing](https://docs.npmjs.com/staged-publishing/).
-
-Before announcing the patch release, repeat the clean consumer installation/import test from a temporary project.
+Before announcing a release, repeat a clean consumer install/import test.
 
 
 ## Security boundaries
