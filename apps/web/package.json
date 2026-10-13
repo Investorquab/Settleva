@@ -11,7 +11,6 @@
     "preflight:mainnet": "node --env-file-if-exists=.env.production scripts/mainnet-preflight.mjs"
   },
   "dependencies": {
-    "@reclaimprotocol/js-sdk": "^5.8.2",
     "@settleva/conditions": "workspace:*",
     "@settleva/sdk": "workspace:*",
     "@settleva/providers": "workspace:*",
