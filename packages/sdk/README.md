@@ -2,9 +2,11 @@
 
 The Settleva SDK is developer infrastructure for conditional USDC settlement on Arc. It prepares payment commitments and typed contract calls; it does not custody funds, sign user transactions, or decide whether external evidence is true.
 
-## Package status
+## Package status and installation
 
-The SDK and its conditions dependency are configured for public npm publication, but they are not installable from npm until the package owner publishes them. Publish @settleva/conditions before @settleva/sdk; pnpm rewrites the workspace dependency when publishing. After publication, install into an existing application with:
+The package metadata and release workflow are ready, but npm installation is not available until the package owner publishes both `@settleva/conditions` and `@settleva/sdk`. The conditions package must be published first because the SDK depends on it. Do not copy an unpublished install command into a production integration and assume it works.
+
+After publication is verified, install into an existing application:
 
     pnpm add @settleva/sdk
     # or: npm install @settleva/sdk
@@ -62,16 +64,17 @@ The condition engine currently supports exact equality (equals). A real settleme
 
 The four website scenarios—gaming rewards, freelance milestones, conditional commerce and agentic economy—are local demonstrations. The SDK does not make all four evidence sources live automatically.
 
-Reclaim/GitHub proof work is deferred to Future Integrations: Reclaim. It is not required to import or use the base SDK.
+Reclaim/GitHub proof work is deferred to [Future Integrations: Reclaim](../../future-integrations/reclaim/README.md). It is not required to import or use the base SDK.
 
 ## Package publishing (maintainer)
 
-From a clean checkout, run pnpm install --frozen-lockfile, pnpm check, pnpm test and pnpm build. After confirming npm ownership and logging in:
+Use [.github/workflows/publish-npm.yml](../../.github/workflows/publish-npm.yml) from the repository's GitHub Actions page on the `main` branch. The workflow validates, builds and packs both packages, then publishes `@settleva/conditions` before `@settleva/sdk`. It has an explicit `publish_now` confirmation input, and version numbers come from each package's `package.json`.
 
-    pnpm --filter @settleva/conditions publish --access public
-    pnpm --filter @settleva/sdk publish --access public
+For the initial publication, configure the GitHub Actions repository secret `NPM_TOKEN` with permission to publish these public packages. Run the workflow with `publish_now=true` only after confirming the package namespace is owned and release contents are correct.
 
-The first command must succeed before publishing the SDK because the published SDK depends on @settleva/conditions. Publication requires registry authorization and is separate from GitHub CI or a website deployment.
+After the first successful release, configure npm Trusted Publishing for each package: GitHub Actions, repository `Investorquab/Settleva`, workflow `publish-npm.yml`, environment `npm-publish`. Then remove `NPM_TOKEN` and use the workflow's GitHub OIDC identity for later publishes. See the root README for the full release steps.
+
+Before announcing an SDK release, verify both package pages on npm and test a clean consumer install in a separate temporary project.
 
 ## Security boundaries
 
