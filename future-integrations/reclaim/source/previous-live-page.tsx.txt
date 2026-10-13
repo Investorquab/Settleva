@@ -1,0 +1,12 @@
+/* Archived Reclaim-based live-console implementation. Original path: apps/web/app/live/page.tsx. Preserved for review; not part of the active V1 application. */
+import type { Metadata } from "next";
+import LiveSettlementConsole from "./live-settlement-console";
+
+export const metadata: Metadata = {
+  title: "Live Settlement | Settleva",
+  description: "Create a real Arc USDC escrow, verify payment-bound GitHub deployment evidence with Reclaim, and release funds to the payee."
+};
+
+export default function LiveSettlementPage() {
+  return <LiveSettlementConsole />;
+}
