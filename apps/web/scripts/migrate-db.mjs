@@ -9,35 +9,11 @@ if (!databaseUrl) {
 const sql = postgres(databaseUrl, { max: 1, connect_timeout: 10 });
 try {
   await sql.begin(async (tx) => {
+    // Provider-neutral replay table used by signed-source integrations.
+    // Legacy Reclaim session tables, if present, are left untouched for the deferred integration.
     await tx.unsafe(`
-      create table if not exists settleva_reclaim_sessions (
-        session_id text primary key,
-        payment_id text not null,
-        condition_hash text not null,
-        condition jsonb not null,
-        provider_id text not null,
-        provider_version text not null,
-        status_token_hash text,
-        status text not null check (status in ('pending', 'verified', 'failed')),
-        proof jsonb,
-        proof_identifier text,
-        verification_signature text,
-        error text,
-        created_at timestamptz not null default now(),
-        updated_at timestamptz not null default now()
-      )
-    `);
-    await tx.unsafe(`
-      alter table settleva_reclaim_sessions
-      add column if not exists status_token_hash text
-    `);
-    await tx.unsafe(`
-      create index if not exists settleva_reclaim_sessions_payment_idx
-      on settleva_reclaim_sessions (payment_id)
-    `);
-    await tx.unsafe(`
-      create table if not exists settleva_reclaim_replay (
-        identifier_type text not null,
+      create table if not exists settleva_evidence_replay (
+        identifier_type text not null check (identifier_type in ('session', 'proof')),
         identifier text not null,
         session_id text not null,
         proof_identifier text not null,
@@ -47,23 +23,18 @@ try {
         primary key (identifier_type, identifier)
       )
     `);
-
-    // Rebuild the partial unique indexes to repair any earlier schema variant
-    // that used a global session/proof uniqueness rule.
-    await tx.unsafe("drop index if exists settleva_reclaim_replay_session_idx");
-    await tx.unsafe("drop index if exists settleva_reclaim_replay_proof_idx");
     await tx.unsafe(`
-      create unique index settleva_reclaim_replay_session_idx
-      on settleva_reclaim_replay (session_id)
+      create unique index if not exists settleva_evidence_replay_session_idx
+      on settleva_evidence_replay (session_id)
       where identifier_type = 'session'
     `);
     await tx.unsafe(`
-      create unique index settleva_reclaim_replay_proof_idx
-      on settleva_reclaim_replay (proof_identifier)
+      create unique index if not exists settleva_evidence_replay_proof_idx
+      on settleva_evidence_replay (proof_identifier)
       where identifier_type = 'proof'
     `);
   });
-  console.log("Settleva session/replay tables and indexes are ready.");
+  console.log("Settleva provider-neutral evidence replay table and indexes are ready.");
 } finally {
   await sql.end({ timeout: 5 });
 }
