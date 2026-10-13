@@ -23,27 +23,19 @@ These are four policy examples over the same settlement primitives, not four sep
 
 ## SDK distribution status
 
-Both public packages have been released as version `0.1.0` and verified from a clean consumer project. A fresh `npm install @settleva/sdk@0.1.0` resolved `@settleva/conditions@0.1.0`, and the SDK's `prepareCreatePayment`, `buildApprovalCall`, and `buildCreatePaymentCall` exports imported successfully.
+Both public packages are released at version `0.1.1`:
 
-The next patch release is `0.1.1`. This release corrects the published package documentation and validates tokenless npm Trusted Publishing (OIDC). The release workflow is [.github/workflows/publish-npm.yml](.github/workflows/publish-npm.yml).
+- [`@settleva/conditions@0.1.1`](https://www.npmjs.com/package/@settleva/conditions)
+- [`@settleva/sdk@0.1.1`](https://www.npmjs.com/package/@settleva/sdk)
 
-### Configure npm Trusted Publishing (once per package)
+A clean consumer test installed `@settleva/sdk@0.1.1`, resolved `@settleva/conditions@0.1.1`, and successfully imported `prepareCreatePayment`, `buildApprovalCall`, and `buildCreatePaymentCall`. The GitHub Actions staged-release workflow has also completed successfully using the configured npm Trusted Publisher path. The temporary `NPM_TOKEN` secret and npm token have been removed/revoked.
 
-Open each npm package's **Settings → Trusted Publisher** section and add a GitHub Actions publisher:
+Future releases are staged through [.github/workflows/publish-npm.yml](.github/workflows/publish-npm.yml) using GitHub Actions OIDC. The workflow stages `@settleva/conditions` before `@settleva/sdk`; a maintainer must approve conditions with npm 2FA, verify it is live, and then approve the SDK. The workflow does not perform direct `npm publish`.
 
-- Organization or user: `Investorquab`
-- Repository: `Settleva`
-- Workflow filename: `publish-npm.yml` (filename only, not the full path)
-- Environment: `npm-publish`
-- Allowed action: `npm stage publish` only; direct `npm publish` is not needed.
+## Arc mainnet deployment status
 
-Repeat for both `@settleva/conditions` and `@settleva/sdk`. The workflow has `id-token: write` and uses npm CLI 11.21.0, so staged publication can authenticate through OIDC without a long-lived token.
+The SDK distribution gate is complete. The remaining major gate is a verified contract deployment and real source-to-settlement test. The repository has no verified deployment address/transaction or completed real USDC release recorded yet. Follow the [Arc Mainnet Deployment Runbook](docs/MAINNET_DEPLOYMENT_RUNBOOK.md): separate the deployment key from the server-side verifier key, dry-run before broadcasting, configure the deployed address and backend secrets, run the mainnet preflight, then test one authoritative evidence source through funding, attestation, release and replay/negative cases.
 
-After both publishers are configured, run **Actions → Publish npm packages** on `main` with `stage_release=true`. The workflow stages `@settleva/conditions` before `@settleva/sdk`. Approve conditions with npm 2FA, verify it is live, then approve the SDK. Staging is not a public release until you approve it.
-
-Keep the existing `NPM_TOKEN` secret until the `0.1.1` staged workflow succeeds using the configured OIDC publisher. Then remove the GitHub Actions secret and revoke the temporary npm token from npm's Access Tokens page. Never put npm tokens or private keys in source code.
-
-See [the SDK README](packages/sdk/README.md) and the [npm trusted publishing guide](https://docs.npmjs.com/trusted-publishers/) for maintainer details.
 
 ## Verification and future work
 

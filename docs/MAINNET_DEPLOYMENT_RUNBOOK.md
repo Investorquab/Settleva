@@ -108,9 +108,22 @@ Only after deployment, configuration and source validation:
 
 If the actual source-to-attestation-to-release sequence cannot complete, do not claim production-enabled conditional settlement. Keep the remaining scenarios labelled as simulations.
 
-## Package release gate
+## Package release status
 
-The SDK and conditions packages are prepared for public npm publication but are not installable from npm until the package owner publishes both. Run the workspace checks first, then publish @settleva/conditions followed by @settleva/sdk using the instructions in packages/sdk/README.md. Registry publication requires the package owner's npm authorization.
+The public packages `@settleva/conditions@0.1.1` and `@settleva/sdk@0.1.1` are released. A clean consumer test installed `@settleva/sdk@0.1.1`, resolved the matching conditions dependency, and imported the SDK's payment-preparation and contract-call helpers successfully. Trusted Publisher staging was also exercised through GitHub Actions. Package distribution is no longer the deployment blocker.
+
+## Current deployment gate
+
+Do not broadcast a mainnet deployment until the clean-checkout repository checks and Arc Foundry tests pass and the following are ready:
+
+1. A dedicated deployer wallet with enough Arc native USDC for gas.
+2. A separate verifier private key, kept exclusively in server-side secret storage, and its matching `VERIFICATION_SIGNER` address.
+3. A successful dry run of `script/Deploy.s.sol:DeploySettleva` on chain ID 5042.
+4. A planned hosting configuration for the deployed contract address, matching frontend address, RPC URLs, chain ID and production `DATABASE_URL`.
+5. A real authoritative source integration for the first settlement test.
+
+After broadcasting, record the deployment transaction and address, verify on-chain bytecode, `verificationSigner()`, and `ARC_USDC()`, apply the replay/session database migration, and run `pnpm --filter @settleva/web preflight:mainnet`. Do not treat preflight alone as proof of settlement. The first acceptance test must complete real USDC funding → authentic source evidence → payment-bound backend attestation → payee release, followed by negative-condition and replay tests and a separate expiry/refund test.
+
 
 ## Submission evidence
 
