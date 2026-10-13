@@ -1,0 +1,207 @@
+/* Archived V1 Reclaim experiment source snapshot. Original path: apps/web/lib/reclaim-verification.ts. Preserved for future continuation; not compiled by the active application. */
+import { ReclaimProofRequest, verifyProof } from "@reclaimprotocol/js-sdk";
+import { evaluateClaims, hashCondition, type PaymentCondition } from "@settleva/conditions";
+import { buildVerificationAttestationHash } from "@settleva/sdk";
+import { findMatchingVerifiedProofData, PostgresReplayStore } from "@settleva/verification";
+import { getAddress, isAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
+import { normalizeReclaimExtractedParameters } from "./reclaim-binding.js";
+import {
+  assertConditionCommitment,
+  assertProofFreshness,
+  assertProofIdentifier,
+  assertProviderPin,
+  assertResolvedProviderPin,
+  assertSingleProof,
+  assertVerifiedContextBinding,
+  assertVerifiedProofDataBinding
+} from "./reclaim-decision.js";
+import { privateKeyToAccount } from "viem/accounts";
+import {
+  assertFundedPaymentOnchain,
+  SettlementChainConfigurationError,
+  SettlementChainRpcError,
+  SettlementPaymentStateError
+} from "./settlement-chain.js";
+
+export interface ReclaimVerificationInput {
+  readonly proofs: unknown[];
+  readonly sessionId: string;
+  readonly condition: PaymentCondition;
+  readonly expectedPaymentId: string;
+  readonly expectedConditionHash: Hex;
+  readonly expectedProviderId: string;
+  readonly expectedProviderVersion: string;
+}
+
+export class ReclaimVerificationError extends Error {
+  readonly code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN" | "PROVIDER" | "CONDITION_FAILED";
+
+  constructor(code: "INVALID" | "REPLAY" | "DATABASE" | "CHAIN" | "PROVIDER" | "CONDITION_FAILED", message: string) {
+    super(message);
+    this.name = "ReclaimVerificationError";
+    this.code = code;
+  }
+}
+
+export interface ReclaimVerificationResult {
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly claims: readonly {field:string;value:string}[];
+  readonly proof: unknown;
+  readonly proofIdentifier: string;
+  readonly verificationSigner: string;
+  readonly verificationSignature: Hex;
+}
+
+export async function verifyReclaimAndAttest(input: ReclaimVerificationInput): Promise<ReclaimVerificationResult> {
+  assertSingleProof(input.proofs);
+  assertConditionCommitment(
+    input.condition,
+    input.expectedConditionHash,
+    hashCondition(input.condition)
+  );
+
+  const appId = process.env.RECLAIM_APP_ID;
+  const appSecret = process.env.RECLAIM_APP_SECRET;
+  const verifierPrivateKey = process.env.SETTLEVA_VERIFIER_PRIVATE_KEY as Hex | undefined;
+  if (!appId || !appSecret || !verifierPrivateKey) throw new Error("Reclaim credentials and Settleva verifier signing key are not configured.");
+
+  const configuredChainId = process.env.SETTLEVA_CHAIN_ID;
+  const configuredContract = process.env.SETTLEVA_CONTRACT_ADDRESS;
+  if (!configuredChainId || !/^\d+$/.test(configuredChainId) || BigInt(configuredChainId) <= 0n) {
+    throw new Error("A valid SETTLEVA_CHAIN_ID is required before issuing settlement attestations.");
+  }
+  if (!configuredContract || !isAddress(configuredContract)) {
+    throw new Error("A valid SETTLEVA_CONTRACT_ADDRESS is required before issuing settlement attestations.");
+  }
+  const chainId = BigInt(configuredChainId);
+  const verifyingContract: Address = getAddress(configuredContract);
+
+  assertProviderPin(input.condition,input.expectedProviderId,input.expectedProviderVersion);
+
+  try {
+    await assertFundedPaymentOnchain(
+      input.expectedPaymentId as Hex,
+      input.condition,
+      input.expectedConditionHash
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not validate the Arc payment commitment.";
+    if (error instanceof SettlementChainConfigurationError || error instanceof SettlementChainRpcError) {
+      throw new ReclaimVerificationError("CHAIN", message);
+    }
+    if (error instanceof SettlementPaymentStateError) {
+      throw new ReclaimVerificationError("INVALID", message);
+    }
+    throw new ReclaimVerificationError("CHAIN", "Could not validate the current Arc payment state.");
+  }
+
+  let providerId: string;
+  let providerVersion: string;
+  try {
+    const requestConfig = await ReclaimProofRequest.init(appId,appSecret,input.expectedProviderId,{
+      log:false,
+      providerVersion:input.expectedProviderVersion,
+      useBrowserExtension:false
+    });
+    const resolved = requestConfig.getProviderVersion();
+    providerId = resolved.providerId;
+    providerVersion = resolved.providerVersion;
+    assertResolvedProviderPin(providerId,providerVersion,input.expectedProviderId,input.expectedProviderVersion);
+  } catch {
+    throw new ReclaimVerificationError("PROVIDER", "Reclaim could not resolve the exact configured provider version.");
+  }
+
+  let result: Awaited<ReturnType<typeof verifyProof>>;
+  try {
+    result = await verifyProof(
+      input.proofs as Parameters<typeof verifyProof>[0],
+      {providerId,providerVersion,teeAttestation:{appSecret}}
+    );
+  } catch {
+    throw new ReclaimVerificationError("PROVIDER", "Reclaim proof verification is temporarily unavailable.");
+  }
+  if (!result.isVerified) {
+    throw new ReclaimVerificationError("INVALID", "Reclaim did not verify the submitted proof.");
+  }
+  if (result.isTeeAttestationVerified !== true) {
+    throw new ReclaimVerificationError("INVALID", "The Reclaim application TEE attestation was not verified.");
+  }
+
+  const proof = input.proofs[0] as Record<string, unknown>;
+  const claimData = proof.claimData as Record<string, unknown> | undefined;
+  assertProofFreshness(claimData?.timestampS);
+  const proofIdentifier = assertProofIdentifier(claimData?.identifier);
+
+  const data = Array.isArray(result.data) ? result.data : [];
+  const matchingProof = findMatchingVerifiedProofData(data,{
+    sessionId:input.sessionId,
+    paymentId:input.expectedPaymentId,
+    conditionHash:input.expectedConditionHash
+  });
+  assertVerifiedProofDataBinding(Boolean(matchingProof));
+
+  const contextValue = matchingProof?.context?.contextMessage;
+  assertVerifiedContextBinding(contextValue,input.expectedConditionHash);
+
+  let claims;
+  try {
+    claims = normalizeReclaimExtractedParameters(matchingProof!.extractedParameters!,input.condition);
+  } catch {
+    throw new ReclaimVerificationError("PROVIDER","Verified evidence could not be normalized by the registered provider adapter.");
+  }
+
+  const evaluation = evaluateClaims(input.condition,claims);
+  if (!evaluation.valid) {
+    // Reached only after signature/TEE verification and exact context binding.
+    throw new ReclaimVerificationError(
+      "CONDITION_FAILED",
+      "Verified evidence did not satisfy the committed payment condition."
+    );
+  }
+
+  // Domain-bind the signature to the configured chain and exact deployed contract.
+  // Missing or invalid deployment configuration fails closed before any signature is issued.
+  const account = privateKeyToAccount(verifierPrivateKey);
+  const verificationSignature = await account.signMessage({
+    message:{raw:buildVerificationAttestationHash({
+      chainId,
+      verifyingContract,
+      paymentId:input.expectedPaymentId as Hex,
+      conditionHash:input.expectedConditionHash,
+      providerHash:keccak256(stringToHex(providerId)),
+      proofIdentifier:proofIdentifier as Hex
+    })}
+  });
+
+  const replayStore = process.env.DATABASE_URL ? new PostgresReplayStore(process.env.DATABASE_URL) : null;
+  if (!replayStore) throw new ReclaimVerificationError("DATABASE","Replay protection database is not configured; no verification attestation will be issued.");
+
+  let replayAccepted: boolean;
+  try {
+    try {
+      replayAccepted = await replayStore.claim({
+        sessionId:input.sessionId,
+        proofIdentifier,
+        paymentId:input.expectedPaymentId,
+        conditionHash:input.expectedConditionHash
+      });
+    } catch {
+      throw new ReclaimVerificationError("DATABASE","Replay protection database is unavailable; no verification attestation will be issued.");
+    }
+  } finally {
+    // Do not mask an accepted replay binding because connection cleanup failed.
+    await replayStore.close().catch(() => undefined);
+  }
+  if (!replayAccepted) throw new ReclaimVerificationError("REPLAY","This Reclaim session or proof has already been accepted.");
+
+  return {
+    providerId,
+    providerVersion,
+    claims,
+    proof,
+    proofIdentifier,
+    verificationSigner:account.address,
+    verificationSignature
+  };
+}
