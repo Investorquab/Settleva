@@ -22,13 +22,13 @@ export class PostgresReplayStore implements ReplayStore {
         // and session persistence can recover the same verified result.
         const existing = await sql`
           select
-            (select count(*) from settleva_reclaim_replay
+            (select count(*) from settleva_evidence_replay
              where identifier_type = 'session'
                and identifier = ${binding.sessionId}
                and proof_identifier = ${binding.proofIdentifier}
                and payment_id = ${binding.paymentId}
                and condition_hash = ${binding.conditionHash}) as session_match,
-            (select count(*) from settleva_reclaim_replay
+            (select count(*) from settleva_evidence_replay
              where identifier_type = 'proof'
                and identifier = ${binding.proofIdentifier}
                and session_id = ${binding.sessionId}
@@ -40,7 +40,7 @@ export class PostgresReplayStore implements ReplayStore {
         }
 
         const sessionInsert = await sql`
-          insert into settleva_reclaim_replay
+          insert into settleva_evidence_replay
             (identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash)
           values
             ('session', ${binding.sessionId}, ${binding.sessionId}, ${binding.proofIdentifier}, ${binding.paymentId}, ${binding.conditionHash})
@@ -54,7 +54,7 @@ export class PostgresReplayStore implements ReplayStore {
           // payment/condition/proof tuple.
           const recovered = await sql`
             select count(*) as count
-            from settleva_reclaim_replay
+            from settleva_evidence_replay
             where identifier_type = 'proof'
               and identifier = ${binding.proofIdentifier}
               and session_id = ${binding.sessionId}
@@ -65,7 +65,7 @@ export class PostgresReplayStore implements ReplayStore {
         }
 
         const proofInsert = await sql`
-          insert into settleva_reclaim_replay
+          insert into settleva_evidence_replay
             (identifier_type, identifier, session_id, proof_identifier, payment_id, condition_hash)
           values
             ('proof', ${binding.proofIdentifier}, ${binding.sessionId}, ${binding.proofIdentifier}, ${binding.paymentId}, ${binding.conditionHash})
