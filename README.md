@@ -23,13 +23,27 @@ These are four policy examples over the same settlement primitives, not four sep
 
 ## SDK distribution status
 
-The SDK and its condition-engine dependency are prepared for public npm publication, but they are not installable from npm until the package owner publishes them and verifies a clean consumer installation. The release workflow is [.github/workflows/publish-npm.yml](.github/workflows/publish-npm.yml).
+Both public packages have been released as version `0.1.0` and verified from a clean consumer project. A fresh `npm install @settleva/sdk@0.1.0` resolved `@settleva/conditions@0.1.0`, and the SDK's `prepareCreatePayment`, `buildApprovalCall`, and `buildCreatePaymentCall` exports imported successfully.
 
-For the initial release, create an npm granular access token with **Read and write (stage only)** permission, leave **Bypass two-factor authentication** unchecked, select only the `@settleva` scope if it is available to your npm account, and set a short expiry. Save it as the GitHub Actions repository secret `NPM_TOKEN`. Then run **Actions → Publish npm packages** on `main` and set `stage_release` to true. The workflow validates the repository, creates package tarballs, confirms the SDK has no unresolved `workspace:` dependency, and stages `@settleva/conditions` before `@settleva/sdk` using `npm stage publish`.
+The next patch release is `0.1.1`. This release corrects the published package documentation and validates tokenless npm Trusted Publishing (OIDC). The release workflow is [.github/workflows/publish-npm.yml](.github/workflows/publish-npm.yml).
 
-Staging is not the same as public release. Open npm's **Staged Packages** page and review the staged `@settleva/conditions` package first. Approve it using npm's required 2FA, verify it is live, and only then approve `@settleva/sdk`. For a package that has never existed, npm may show a public `0.0.0-stage` placeholder; the staged package contents remain unavailable until approval. See the [npm staged-publishing guide](https://docs.npmjs.com/staged-publishing/) and [the SDK README](packages/sdk/README.md).
+### Configure npm Trusted Publishing (once per package)
 
-After verifying the first releases, configure npm Trusted Publishing for both packages with provider **GitHub Actions**, owner **Investorquab**, repository **Settleva**, workflow **publish-npm.yml**, and environment **npm-publish**. Test a trusted publish/stage flow before removing `NPM_TOKEN`. Do not describe npm distribution as complete until both package pages and a clean consumer installation have been verified.
+Open each npm package's **Settings → Trusted Publisher** section and add a GitHub Actions publisher:
+
+- Organization or user: `Investorquab`
+- Repository: `Settleva`
+- Workflow filename: `publish-npm.yml` (filename only, not the full path)
+- Environment: `npm-publish`
+- Allowed action: `npm stage publish` only; direct `npm publish` is not needed.
+
+Repeat for both `@settleva/conditions` and `@settleva/sdk`. The workflow has `id-token: write` and uses npm CLI 11.21.0, so staged publication can authenticate through OIDC without a long-lived token.
+
+After both publishers are configured, run **Actions → Publish npm packages** on `main` with `stage_release=true`. The workflow stages `@settleva/conditions` before `@settleva/sdk`. Approve conditions with npm 2FA, verify it is live, then approve the SDK. Staging is not a public release until you approve it.
+
+Keep the existing `NPM_TOKEN` secret until the `0.1.1` staged workflow succeeds using the configured OIDC publisher. Then remove the GitHub Actions secret and revoke the temporary npm token from npm's Access Tokens page. Never put npm tokens or private keys in source code.
+
+See [the SDK README](packages/sdk/README.md) and the [npm trusted publishing guide](https://docs.npmjs.com/trusted-publishers/) for maintainer details.
 
 ## Verification and future work
 
