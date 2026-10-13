@@ -121,8 +121,8 @@ jobs:
           sdk_tgz="$(find release-artifacts -maxdepth 1 -type f -name 'settleva-sdk-*.tgz' -print -quit)"
           test -n "$conditions_tgz" && test -s "$conditions_tgz"
           test -n "$sdk_tgz" && test -s "$sdk_tgz"
-          npm stage publish "$conditions_tgz" --access public
-          npm stage publish "$sdk_tgz" --access public
+          npm stage publish "./$conditions_tgz" --access public
+          npm stage publish "./$sdk_tgz" --access public
           echo "Both package versions are staged for review, not publicly released."
           echo "Approve @settleva/conditions first in npm's Staged Packages UI."
           echo "Only after conditions is live, approve @settleva/sdk."
