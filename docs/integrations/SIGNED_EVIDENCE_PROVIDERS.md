@@ -1,6 +1,6 @@
 # Signed Evidence Provider Integration
 
-Settleva supports a second evidence path for use cases whose authoritative system can sign its own outcome event. It is separate from Reclaim. It allows a game server, marketplace workflow, order-management system, or agent execution service to integrate without pretending that a source-specific Reclaim provider already exists.
+Settleva includes a generic source-signed evidence integration boundary for use cases whose authoritative system can sign its own outcome event. It allows a game server, marketplace workflow, order-management system, or agent execution service to send signed evidence to an integrator-controlled verifier backend. It is not a ready-made connector for any scenario; each source must independently establish the truth of its outcome.
 
 This is an integration protocol, not four pre-configured live integrations. Each source must own and protect its signing key, be authoritative for the outcome, be configured by exact provider ID and version, and pass a real Arc end-to-end acceptance test.
 
