@@ -1,49 +1,29 @@
-# Settleva Application Security Review (Static, Not Third-Party Audit)
+# Settleva V1 Security Boundaries
 
-**Review date:** 11 October 2026  
-**Baseline:** `Investorquab/Settleva` main at `0705c98a6e9d8c8defd8d122578e8cba86c14648`  
-**Scope:** Static review of Reclaim request/callback/status handling, session and replay persistence, request parsing, public error behavior, contract trust boundary, and CI-backed tests. This is not a third-party penetration test or proof of live mainnet deployment.
+**Scope:** Product architecture and the current SDK/contract integration boundaries. This is an engineering security note, not a third-party audit or proof of production deployment.
 
-## Executive result
+## Key ownership
 
-The application-level findings identified in this pass are addressed by the accompanying hardening change and backed by regression/database tests. The tests also surfaced and fixed a PostgreSQL JSONB serialization defect: stored conditions/proofs must round-trip as JSON objects, not JSON strings. There is one authoritative verification-commit path; unverified callback submissions and provider/infrastructure errors cannot permanently fail a pending session; terminal failure requires a Reclaim-verified and correctly bound proof whose extracted claims fail the committed condition. Public endpoints use bounded streamed JSON parsing and no longer echo raw provider/database exception text.
+- A developer uses their own application and wallet provider. The SDK prepares calls but should never require the developer to share a private key with the SDK or website.
+- Each integrator can deploy its own Settleva contract instance and select the instance's verifier at deployment. The verifier private key belongs only in that integrator's trusted server-side secret manager; it must never be placed in browser code, a NEXT_PUBLIC environment variable, a public repository or chat.
+- Keep deployment and verifier keys distinct. The current contract's verifier address is immutable; replacing it requires a replacement contract instance.
+- The contract enforces on-chain payment lifecycle rules and only accepts an attestation from its configured verifier. This is backend-attested settlement, not trustless on-chain verification of external evidence.
 
-This review is not a production-launch certificate or a third-party penetration test. It reflects the Reclaim request/callback/status implementation at the stated baseline, not all subsequent code.
+## Payment integrity
 
-### Scope added after this review
+- The condition, provider identity/version, expiry and payment parameters are committed when a payment is created.
+- A new escrow can use a different condition without redeploying the contract. The current contract does not allow editing the terms of an already-funded payment in place.
+- A verification integration must establish the outcome from an authoritative source, bind it to the funded payment and exact condition, protect against replay, and issue the attestation only after validation.
+- The current policy operator is exact equality (equals). Do not interpret a matching client-supplied JSON value as source proof.
 
-PR #7, merged on 12 October 2026 as `2b698d5e07e4ec9e0955616f4a88c50c55997397`, added `POST /api/evidence/attest`, a source-signed Ed25519 evidence path. The new endpoint has automated tests for signature validation, stale requests, provider pinning, condition integrity and claim-set shape, and the merged main CI passes. However, this earlier static review did **not** independently assess the new endpoint end to end, production key custody, source-event truth guarantees, operational abuse controls, or an actual deployed integration. Those must be included in a focused security review before the source-signed path is enabled for real funds.
+## Four demo scenarios
 
-Distributed request-rate and concurrency limits must be configured at the deployed trusted edge/proxy, then validated against the actual hosting configuration. The Reclaim provider ID/version investigation was explicitly excluded from the original review and remains open for the `/live` Reclaim path. No live Arc transaction was created by this review.
+Gaming rewards, freelance milestones, conditional commerce and agentic economy are website/playground simulations. Each requires its own authoritative source integration and real positive/negative acceptance tests before being described as production-enabled. A green test suite or ready website does not prove a real Arc USDC settlement.
 
-## Findings and disposition
+## Deferred Reclaim work
 
-| Finding | Disposition | Regression evidence |
-| --- | --- | --- |
-| An unverified callback could fail a pending session by supplying a proof whose context identified that session | Fixed: only verified, TEE-checked and exactly bound evidence that fails claim evaluation can trigger terminal failure; the write is conditional on `status = 'pending'` | Decision tests cover terminal vs. nonterminal outcomes; PostgreSQL state tests cover compare-and-set behavior |
-| Provider/SDK failures could be mistaken for permanent invalid evidence | Fixed: provider resolution and SDK exceptions receive a retryable error classification; unknown failures do not change session state | Explicit verification error taxonomy and callback decisions |
-| Public endpoints parsed unbounded JSON | Fixed: shared streaming parser checks declared and actual bytes; callback limit 1 MiB, request/readiness 64 KiB, status 16 KiB | Tests cover valid JSON, declared oversize, streamed oversize, and malformed bodies |
-| Two endpoints could independently commit verification state | Fixed: `/api/reclaim/verify` returns HTTP 410; callback is the sole authoritative verification-commit path | Retired route is explicitly fail-closed |
-| Public errors could expose SDK/database exception text; old persisted errors could be surfaced to pollers | Fixed: public errors are classified and sanitized; status endpoint never echoes historical `session.error` | Response paths reviewed and status access remains token-gated |
-| Session conditions/proofs did not round-trip as JSONB objects | Fixed: use the database client's explicit JSON wrapper when writing condition and proof data | PostgreSQL session integration test asserts the condition and proof round-trip as objects |
-| Persistent replay/session behavior needed direct database evidence | Covered in CI: PostgreSQL integration tests exercise same-binding retries, conflicting identifiers, transaction rollback, concurrent proof contention, session persistence and terminal-state transitions | CI migrates schema before running tests against PostgreSQL 16 |
-| DB connection stalls could tie up public request handlers | Mitigated: both persistence clients now use bounded connection and idle timeouts | Workspace tests/build and CI PostgreSQL integration |
+Reclaim/GitHub deployment proof is not part of V1's required runtime path. Its former implementation, tests, provider notes, and historical Reclaim security review are preserved under [Future Integrations: Reclaim](../future-integrations/reclaim/README.md). That archived review describes the implementation at its original baseline; it does not certify the current V1 or a deployed system.
 
-## Security properties reviewed
+## Acceptance before using real funds
 
-- **Attestation binding:** the signed release attestation is bound to chain ID, contract address, payment ID, condition hash, provider hash, and Reclaim proof identifier.
-- **Session binding:** session ID from proof context is a lookup hint, not authorization. Proof signature, app-secret TEE verification and verified data binding remain required before a signature can be issued.
-- **Replay protection:** independent PostgreSQL uniqueness boundaries protect session and proof identifiers. An exact retry of the same complete tuple is intentionally idempotent to recover from a failure between replay acceptance and session-state commit.
-- **Status access:** the status token is independently random, stored as a hash, checked in constant time, restricted to POST JSON, and never placed in a URL. Unknown sessions and invalid status tokens return the same response.
-- **Contract authority:** settlement is backend-attested, not trustless on-chain Reclaim verification. The immutable verifier signing key is a critical trust root; compromise could authorize invalid release, and the key cannot be rotated in-place.
-- **UI scope:** the protected homepage, global CSS and layout are not part of this change.
-
-## Operational gates not represented as a code-level pass
-
-1. **Trusted-edge rate limiting:** apply distributed request-rate and concurrency caps to `/api/reclaim/request`, `/api/reclaim/callback`, `/api/reclaim/readiness`, `/api/reclaim/status`, and `/api/evidence/attest`. The proxy must overwrite/authenticate the client-IP header used by the rule; never trust client-supplied `X-Forwarded-For`. Hosting configuration must be checked before selecting a provider-specific limiter.
-2. **Reclaim provider ID/version:** intentionally excluded from this audit pass. Do not invent or infer these values. The separate investigation must verify a published provider against all five extracted claims.
-3. **Live chain validation:** after the real contract, server environment, callback and database are deployed, run preflight and demonstrate controlled low-value mainnet funding → fresh valid proof → attestation → payee release, plus invalid-proof rejection and payer refund after expiry. Source review and CI do not demonstrate that a deployed financial flow works.
-
-## CI acceptance
-
-The reviewed Reclaim hardening baseline passed frozen-lockfile installation, workspace type checks, tests (including PostgreSQL), workspace build, and Arc Foundry contract tests. The subsequent signed-evidence addition also passed the merged main CI run [38310472629](https://github.com/Investorquab/Settleva/actions/runs/38310472629). This records test evidence, not an independent security certification or live deployment.
+Before a use case is described as production-enabled, verify the exact deployed contract and immutable verifier, validate the authoritative source and its failure cases, confirm persistent replay protection, complete a controlled low-value Arc USDC funding → verified evidence → attestation → release flow, and separately exercise invalid/replayed evidence and expiry/refund behavior.
