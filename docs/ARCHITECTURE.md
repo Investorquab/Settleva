@@ -25,23 +25,15 @@ Settleva is developer infrastructure for conditional USDC settlement on Arc. The
 7. If a funded payment reaches expiry without release, the payer can call `refund`.
 
 ```mermaid
-sequenceDiagram
-    participant App as Integrator application / SDK
-    participant Payer as Payer wallet
-    participant Chain as Settleva contract on Arc
-    participant Source as Authoritative source
-    participant API as Verification API + PostgreSQL
-    participant Payee as Payee wallet
-
-    App->>Payer: Request approval and create-payment calls
-    Payer->>Chain: approve USDC; createPayment(...)
-    Chain-->>App: PaymentCreated
-    Source->>API: Signed event + timestamp
-    API->>Chain: Read funded payment and committed terms
-    API->>API: Verify Ed25519 signature, condition and replay state
-    API-->>Source: Payment-bound attestation
-    Payee->>Chain: release(paymentId, proofIdentifier, signature)
-    Chain-->>Payee: PaymentReleased + USDC transfer
+flowchart TD
+    A["Integrating application and SDK"] --> B["Payer wallet funds payment"]
+    B --> C["Contract records payment terms on Arc"]
+    D["Authoritative source confirms outcome"] --> E["Source-owned signer signs evidence"]
+    E --> F["Verification API checks evidence and payment"]
+    C --> F
+    F --> G["Payment-bound attestation"]
+    G --> H["Designated payee submits release"]
+    H --> I["Contract releases USDC on Arc"]
 ```
 
 The source key and Settleva verifier key serve different trust roles. The source proves its outcome to the backend; the Settleva verifier attests that the outcome meets the funded payment condition. The contract does not independently verify arbitrary Web2 evidence.
