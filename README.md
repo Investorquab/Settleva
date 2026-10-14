@@ -1,77 +1,112 @@
 # Settleva
 
-**Settleva is developer infrastructure for policy-based, evidence-driven USDC settlement on Arc.**
+**Developer infrastructure for policy-based, evidence-driven USDC settlement on Arc.**
 
-Define the condition in code. Let your application verify the outcome. Settle the payment on-chain.
+Settleva gives developers a reusable Solidity escrow contract, a TypeScript SDK, a deterministic condition engine, and a server-side verification boundary. An application defines the payment policy, connects an authoritative source for its outcome, and lets the designated payee submit a payment-bound release on Arc.
 
-## Product model
+[Live website](https://settleva.vercel.app) · [Public API](https://settleva-api.185-7-81-139.sslip.io/api/evidence/attest) · [Arc contract](https://explorer.arc.io/address/0x104E6D889875c5bac04c6a17cfb66d74b4638e95) · [Deployment transaction](https://explorer.arc.io/tx/0xd1e46746f7c647dc2c4a749d6a0803edd1857585f3dc411209a91c659775c189)
 
-Settleva consists of a reusable SDK, a settlement contract implementation, a condition engine and verification integration boundaries. Developers integrate these components into their own products. The website demonstrates the developer workflow; it is not a hosted escrow dashboard that developers must use.
+## Current status
 
-Each integrator can deploy its own instance of the same Settleva.sol code and choose its own verificationSigner. The integrator controls its deployment and verifier keys, keeping private keys server-side. Using Settleva must not require trusting a verifier key controlled by the Settleva team.
+As of **14 October 2026**, the demo contract is deployed on Arc mainnet, the standalone attestation API is reachable over HTTPS, the backend mainnet preflight passed 19/19 checks, and a low-value escrow was released successfully on-chain.
 
-Each payment carries its own payer, payee, USDC amount, expiry, condition hash, provider hash and lifecycle state. Developers do not redeploy for every escrow: they create each new payment through a contract transaction. Existing funded-payment terms cannot currently be edited in place. Changing contract code or the current deployment's immutable verifier requires a replacement deployment.
+This is a verified prototype, **not yet a turnkey production service with independently operated providers for all four scenarios**. The scope and limits of the settlement test are documented below and in [Deployment status](docs/STATUS.md).
 
-## Four demonstration scenarios
+| Item | Current demo |
+|---|---|
+| Network | Arc mainnet, chain ID `5042` |
+| Settleva contract | `0x104E6D889875c5bac04c6a17cfb66d74b4638e95` |
+| Immutable verification signer | `0xde98E7De50DBF3AFf588Ec510056Bd010cFc37Cf` |
+| Arc USDC ERC-20 interface | `0x3600000000000000000000000000000000000000` · 6 decimals |
+| Public attestation endpoint | `POST https://settleva-api.185-7-81-139.sslip.io/api/evidence/attest` |
+| Published packages | [`@settleva/conditions@0.1.1`](https://www.npmjs.com/package/@settleva/conditions) · [`@settleva/sdk@0.1.1`](https://www.npmjs.com/package/@settleva/sdk) |
 
-- Gaming rewards
-- Freelance milestones
-- Conditional commerce
-- Agentic economy
+## What has been verified
 
-These are four policy examples over the same settlement primitives, not four separate contracts and not four claims of live evidence integration. The homepage playground evaluates sample policies against sample evidence locally. It does not connect a wallet, create a real escrow, cryptographically verify a source, sign an attestation or transfer USDC.
+- Arc mainnet reports chain ID `5042`; the deployed contract bytecode, canonical Arc USDC interface, and immutable verifier address were checked.
+- The TypeScript check and production build pass. The Arc Foundry contract suite passed 17 tests, and the mainnet infrastructure preflight passed 19 checks.
+- The public attestation route responds over HTTPS. A GET returns the expected `405 Method Not Allowed`; unrelated paths are blocked with `404`.
+- A controlled **0.01 USDC** payment was approved, funded, attested, and released. The final on-chain payment status is `Released (2)`, the proof identifier is marked used, and the contract's USDC balance is zero.
 
-## SDK distribution status
+Key transactions:
 
-Both public packages are released at version `0.1.1`:
+| Action | Transaction |
+|---|---|
+| Contract deployment | [View on Arc Explorer](https://explorer.arc.io/tx/0xd1e46746f7c647dc2c4a749d6a0803edd1857585f3dc411209a91c659775c189) |
+| Test USDC approval | [View on Arc Explorer](https://explorer.arc.io/tx/0xa233733383b8cf0336c8e2edd5718148d4546511a4d63980427c04937f7512f5) |
+| Test escrow creation | [View on Arc Explorer](https://explorer.arc.io/tx/0x46c59b0a2c2ff582a0a180113f8a1ff3e69c16330b70ecea7bb6f2ba2c8cd164) |
+| Test release | [View on Arc Explorer](https://explorer.arc.io/tx/0x445ee9c064d394ead51126abd4b0de76f165bd6a72c2fbecbce5877b15d831a7) |
 
-- [`@settleva/conditions@0.1.1`](https://www.npmjs.com/package/@settleva/conditions)
-- [`@settleva/sdk@0.1.1`](https://www.npmjs.com/package/@settleva/sdk)
+**Important test boundary:** the evidence test used a temporary VPS-side adapter that queried GitHub's live Vercel deployment status and signed an assertion with its own Ed25519 key. GitHub did not cryptographically sign the Settleva evidence message, and this temporary adapter is not yet included as a reusable, version-controlled provider integration in this repository. The test also used the same wallet as payer and payee. It proves the backend/contract settlement path with a real on-chain release; it does not yet prove an independently operated source provider or a normal two-party customer workflow. See [Deployment status](docs/STATUS.md).
 
-A clean consumer test installed `@settleva/sdk@0.1.1`, resolved `@settleva/conditions@0.1.1`, and successfully imported `prepareCreatePayment`, `buildApprovalCall`, and `buildCreatePaymentCall`. The GitHub Actions staged-release workflow has also completed successfully using the configured npm Trusted Publisher path. The temporary `NPM_TOKEN` secret and npm token have been removed/revoked.
+## The four website scenarios
 
-Future releases are staged through [.github/workflows/publish-npm.yml](.github/workflows/publish-npm.yml) using GitHub Actions OIDC. The workflow stages `@settleva/conditions` before `@settleva/sdk`; a maintainer must approve conditions with npm 2FA, verify it is live, and then approve the SDK. The workflow does not perform direct `npm publish`.
+The homepage playground contains real application code for all four policy examples. The condition engine evaluates example policies against sample evidence locally.
 
-## Arc mainnet deployment status
+| Scenario | Demo behavior | Live source integration |
+|---|---|---|
+| Gaming rewards | Evaluates sample match/result claims | Not connected |
+| Freelance milestones | Evaluates sample milestone/acceptance claims | Not connected |
+| Conditional commerce | Evaluates sample order/delivery claims | Not connected |
+| Agentic economy | Evaluates sample task-completion claims | Not connected |
 
-The SDK distribution gate is complete. The remaining major gate is a verified contract deployment and real source-to-settlement test. The repository has no verified deployment address/transaction or completed real USDC release recorded yet. Follow the [Arc Mainnet Deployment Runbook](docs/MAINNET_DEPLOYMENT_RUNBOOK.md): separate the deployment key from the server-side verifier key, dry-run before broadcasting, configure the deployed address and backend secrets, run the mainnet preflight, then test one authoritative evidence source through funding, attestation, release and replay/negative cases.
+These are not static screenshot-only interactions, but neither are they live escrow flows. The homepage playground does not connect a wallet, create a payment, verify an external source, sign a release attestation, or transfer USDC. Integrators provide their own authoritative systems and wallet UX.
 
+## How settlement works
 
-## Verification and future work
+```mermaid
+flowchart LR
+  A[Integrator application + SDK] --> B[Settleva contract: funded payment]
+  C[Authoritative source] --> D[Source-owned evidence signer]
+  D --> E[Settleva verification API]
+  E --> F[Validate signature, condition, payment and replay state]
+  F --> G[Payment-bound attestation]
+  G --> H[Designated payee submits release]
+  H --> I[USDC released on Arc]
+```
 
-The base SDK does not mandate Reclaim. The core protocol needs an authoritative evidence source and a verifier selected by the integrator. A source-signed server integration boundary exists in the repository, but it is not a ready-made integration for every game, marketplace, commerce service or agent orchestrator; each real source still needs implementation and validation.
+The source-signed evidence API verifies an Ed25519 signature over the exact request bytes, enforces a freshness window, checks the policy claims and condition hash, confirms the on-chain payment is funded/unexpired and bound to the same provider/condition, and applies PostgreSQL replay protection before issuing an attestation. The contract accepts that attestation from the designated payee. The API **does not submit the release transaction itself**.
 
-Reclaim/GitHub deployment proof is deferred to [Future Integrations: Reclaim](future-integrations/reclaim/README.md). The earlier code, tests, SQL schemas and provider notes are preserved there for judges and future continuation. It is not a prerequisite for the four website demonstrations or for importing the base SDK.
+This is a backend-attested design: the contract does not independently validate arbitrary Web2 source data. See [Architecture](docs/ARCHITECTURE.md) and [Security model](docs/SECURITY_MODEL.md).
 
-## Repository map
+## Repository layout
 
-- apps/web: approved landing page and local scenario playground.
-- packages/sdk: payment preparation, amount conversion, attestation hashing and viem contract-call builders.
-- packages/conditions: condition schema, canonicalization, hashing and deterministic evaluation.
-- packages/providers: provider integration utilities.
-- packages/verification: verification types and persistent replay protection.
-- contracts: reusable Solidity implementation and tests.
-- future-integrations/reclaim: deferred Reclaim proof work, SQL schemas, source snapshots, findings and next steps.
-- docs: architecture, security, Arc compatibility and deployment notes.
+- `apps/web/` — Next.js website, local scenario playground, and attestation API route.
+- `packages/conditions/` — condition schema, canonicalization, hashing, and deterministic claim evaluation.
+- `packages/sdk/` — payment preparation, amount conversion, attestation hashing, and contract-call builders.
+- `packages/verification/` — persistent replay protection.
+- `packages/providers/` and `packages/core/` — provider utilities and shared primitives.
+- `contracts/` — canonical Solidity settlement contract, deployment script, and tests.
+- `future-integrations/reclaim/` — preserved deferred experiment; not part of the V1 runtime path.
 
-## Development checks
+## Development
 
-Requirements: Node.js 22+, pnpm 10.15.0, and Circle's Arc Foundry for Arc-specific Solidity testing.
+Requirements: Node.js 22+, pnpm 10.15.0, and [Circle's Arc Foundry](https://github.com/circlefin/arc-foundry) for Arc-specific contract testing.
 
 From the repository root:
 
-    pnpm install --frozen-lockfile
-    pnpm check
-    pnpm test
-    pnpm build
+```bash
+pnpm install --frozen-lockfile
+pnpm check
+pnpm test
+pnpm build
+```
 
-From contracts/ in Ubuntu/WSL with Arc Foundry installed:
+From `contracts/` on a system with Arc Foundry installed:
 
-    FOUNDRY_PROFILE=arc arc-forge build --sizes
-    FOUNDRY_PROFILE=arc arc-forge test -vvv
+```bash
+FOUNDRY_PROFILE=arc arc-forge build --sizes
+FOUNDRY_PROFILE=arc arc-forge test -vvv
+```
+
+See the [documentation index](docs/README.md) for deployment, integration, security, and roadmap notes. Coding-agent guidance is in [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) points Claude Code to the same rules.
 
 ## Security and scope
 
-Never place private keys, provider secrets, database credentials or signing secrets in browser code, public environment variables, the repository or chat. A private key is not required by the SDK and must not be accepted by a frontend integration.
+- Never commit private keys, provider signing keys, database credentials, generated secret files, or production environment files.
+- The deployment key, verifier key, and authoritative source's evidence-signing key have different responsibilities and must not be reused.
+- Do not present the four scenario demos or the temporary GitHub-status adapter as independently validated production integrations.
+- A successful build, HTTP response, or mainnet preflight does not by itself prove a settlement. Report only transaction and source evidence that can be independently checked.
+- The contract has an immutable verifier address. Changing the verifier for an existing deployment requires a replacement deployment.
 
-Do not treat a successful API response, client-supplied boolean, mock event or playground result as proof. Before claiming a use case is production-enabled, validate its authoritative source, condition-to-payment binding and replay protection, then complete a real Arc USDC funding → verified evidence → attestation → release test. Green CI and a deployed website do not prove that a real settlement has succeeded.
+This is not a third-party smart-contract audit. Review [SECURITY.md](SECURITY.md) and the [Security model](docs/SECURITY_MODEL.md) before using real funds.

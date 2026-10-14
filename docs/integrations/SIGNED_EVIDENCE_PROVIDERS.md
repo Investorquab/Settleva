@@ -1,3 +1,5 @@
+> **Current demo status (14 October 2026):** the generic protocol below requires a source-owned Ed25519 key for a genuine provider integration. The successful GitHub/Vercel status test recorded in [deployment status](../STATUS.md) used a temporary VPS-side adapter key after querying GitHub's live status API. GitHub did not sign the Settleva envelope, and that adapter is not yet shipped as reusable provider code in this repository. Do not describe this test as a GitHub-cryptographically-signed event or a production-ready provider connector.
+
 # Signed Evidence Provider Integration
 
 Settleva includes a generic source-signed evidence integration boundary for use cases whose authoritative system can sign its own outcome event. It allows a game server, marketplace workflow, order-management system, or agent execution service to send signed evidence to an integrator-controlled verifier backend. It is not a ready-made connector for any scenario; each source must independently establish the truth of its outcome.
