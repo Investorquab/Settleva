@@ -2,6 +2,13 @@
 
 **Developer infrastructure for policy-based, evidence-driven USDC settlement on Arc.**
 
+## 🎥 Demo
+
+[![Settleva Demo](https://img.youtube.com/vi/BlX305PJu84/maxresdefault.jpg)](https://www.youtube.com/watch?v=BlX305PJu84)
+
+[Open the live demo](https://settleva.vercel.app) · [Watch on YouTube](https://youtu.be/BlX305PJu84)
+
+
 Settleva gives application developers a reusable Solidity escrow contract, a TypeScript SDK, deterministic payment-condition primitives, and a server-side evidence-verification boundary. Integrators define the terms of a payment in code, connect the system that can authoritatively confirm the outcome, and allow the designated payee to release funds only when a valid payment-bound attestation is accepted by the contract.
 
 The product is the **SDK, contract, and integration protocol**. Settleva is not intended to be a single hosted marketplace or a new consumer wallet. Each integrator can build its own product and own the application, wallet experience, authoritative source, and operational deployment.
