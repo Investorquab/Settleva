@@ -1,37 +1,33 @@
-# Settleva Documentation Index
+# Documentation index
 
-This index distinguishes V1 product documentation from deferred integration experiments.
+Use this index as the canonical map of Settleva documentation. Current deployed facts live in [Status and deployment evidence](STATUS.md); conceptual architecture and trust boundaries live in [Architecture](ARCHITECTURE.md).
 
 ## Start here
 
-| Document | Purpose | Status |
-| --- | --- | --- |
-| [Project README](../README.md) | Product definition, repository map and current verified scope | Current |
-| [Architecture](ARCHITECTURE.md) | SDK, condition, verifier and contract responsibilities | Current |
-| [Architecture Lock](ARCHITECTURE_LOCK.md) | Binding product decisions and security boundaries | Normative |
-| [Arc Readiness Audit](ARC_READINESS_AUDIT.md) | Arc-specific checks and deployment readiness | Readiness snapshot, not deployment evidence |
-| [Mainnet Deployment Runbook](MAINNET_DEPLOYMENT_RUNBOOK.md) | Arc contract/backend deployment and acceptance gates | Operational guide; follow current architecture |
-| [Security Review](SECURITY_AUDIT.md) | Scoped static security review and known gaps | Not a third-party penetration test |
-| [Signed Evidence Provider Integration](integrations/SIGNED_EVIDENCE_PROVIDERS.md) | Server-to-server signed-source integration boundary | Protocol only; not four ready-made providers |
-| [Contracts README](../contracts/README.md) | Contract lifecycle, verifier and deployment trust boundary | Current |
-| [SDK README](../packages/sdk/README.md) | Installation path, payment example and package publishing | Publication must be verified |
-| [Future Integrations: Reclaim](../future-integrations/reclaim/README.md) | Existing Reclaim/GitHub provider exploration, source snapshots and remaining work | Deferred; not required by V1 |
-| [Future Ideas](planning/FUTURE_IDEAS.md) | Ideas explicitly outside the locked implementation scope | Planning only |
+| Document | Purpose |
+|---|---|
+| [Project README](../README.md) | Product summary, live links, verified scope, quickstart |
+| [Status and deployment evidence](STATUS.md) | Deployed addresses, verified transaction links, actual test scope, remaining gaps |
+| [Architecture](ARCHITECTURE.md) | Components, payment lifecycle, condition commitments, trust boundary |
+| [Mainnet deployment runbook](MAINNET_DEPLOYMENT_RUNBOOK.md) | How to deploy and validate an integrator-owned instance |
+| [Security model](SECURITY_MODEL.md) | Key ownership, attack boundaries, protections, limitations |
+| [Signed evidence integration guide](integrations/SIGNED_EVIDENCE_PROVIDERS.md) | Provider registry, request protocol, signature rules, integration requirements |
+| [Roadmap and open gaps](ROADMAP.md) | Follow-up work without confusing it with shipped functionality |
 
-## Product boundaries
+## Repository and historical material
 
-- The website playground is local simulation only.
-- The current supported condition operator is exact equality (equals).
-- Every integrator may operate its own contract instance and verifier. Do not represent the Settleva demo signer as mandatory for external users.
-- A new payment gets its own condition at creation. Existing funded-payment terms are not editable in place.
-- Green CI or a deployed website does not demonstrate that a real Arc USDC settlement has succeeded.
+- [Contracts guide](../contracts/README.md) — Solidity interface, deployment model, Arc-specific details.
+- [SDK guide](../packages/sdk/README.md) and [conditions package guide](../packages/conditions/README.md) — published packages and integration examples.
+- [Deferred Reclaim experiment](../future-integrations/reclaim/README.md) — archived exploration and snapshots; not imported by the current V1 runtime.
+- [Security reporting policy](../SECURITY.md) — how to report a vulnerability privately.
+- [Agent guidance](../AGENTS.md) — repository-wide rules for coding agents; [Claude Code](../CLAUDE.md) reads the same canonical instructions.
 
-## Production status terminology
+## Status vocabulary
 
-- Implemented: code exists with relevant tests.
-- CI green: repository checks/tests/build and Arc Foundry tests passed; this is not deployment evidence.
-- Configured: real production resources and secrets are present and checked.
-- Source validated: the authoritative source, proof semantics and negative cases have been tested.
-- Production-enabled: an actual Arc payment completed funding, source verification, attestation and release, with balances/transactions confirmed; negative/replay and refund behavior also passed.
+- **Implemented:** code exists in the repository and is covered by relevant tests.
+- **Verified on-chain:** a transaction or state was checked against Arc mainnet.
+- **Demonstration-only:** example/sample data is evaluated locally; no real source or payment is connected.
+- **Prototype integration:** exercised with a test adapter, but not yet shipped as a reusable and independently operated provider.
+- **Production integration:** the actual authoritative source has been connected and has passed valid, invalid, stale, replay, and end-to-end release acceptance tests.
 
-Never promote a simulated scenario to production-enabled based on a policy match alone.
+These terms are deliberately distinct. Do not use a green build or a passing preflight as a synonym for production readiness.
